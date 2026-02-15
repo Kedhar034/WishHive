@@ -59,6 +59,8 @@ dependencies:
 
   receive_sharing_intent: ^1.4.5
   metadata_fetch: ^0.4.2
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
   flutter_image_compress: ^2.4.0
   shared_preferences: ^2.5.4
   lottie: ^3.3.2

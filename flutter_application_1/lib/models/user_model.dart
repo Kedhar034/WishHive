@@ -42,6 +42,8 @@ class UserModel {
   final List<FriendProfile> friends;
   final List<String> friendRequestsSent;
   final List<String> friendRequestsReceived;
+  final List<String> mutedFriends;
+  final List<String> hiddenHiveIds; // New: Hide specific hives
 
   const UserModel({
     required this.uid,
@@ -52,6 +54,8 @@ class UserModel {
     this.friends = const [],
     this.friendRequestsSent = const [],
     this.friendRequestsReceived = const [],
+    this.mutedFriends = const [],
+    this.hiddenHiveIds = const [],
   });
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
@@ -63,7 +67,6 @@ class UserModel {
       if (f is Map<String, dynamic>) {
         return FriendProfile.fromMap(f);
       }
-      // Fallback for old string IDs (shouldn't happen with new logic but safe to keep)
       return FriendProfile(uid: f.toString(), displayName: 'Unknown', email: '');
     }).toList();
 
@@ -76,6 +79,8 @@ class UserModel {
       friends: friendsList,
       friendRequestsSent: List<String>.from(data['friendRequestsSent'] ?? []),
       friendRequestsReceived: List<String>.from(data['friendRequestsReceived'] ?? []),
+      mutedFriends: List<String>.from(data['mutedFriends'] ?? []),
+      hiddenHiveIds: List<String>.from(data['hiddenHiveIds'] ?? []),
     );
   }
 
@@ -88,6 +93,8 @@ class UserModel {
       'friends': friends.map((f) => f.toMap()).toList(),
       'friendRequestsSent': friendRequestsSent,
       'friendRequestsReceived': friendRequestsReceived,
+      'mutedFriends': mutedFriends,
+      'hiddenHiveIds': hiddenHiveIds,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -101,6 +108,8 @@ class UserModel {
     List<FriendProfile>? friends,
     List<String>? friendRequestsSent,
     List<String>? friendRequestsReceived,
+    List<String>? mutedFriends,
+    List<String>? hiddenHiveIds,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -111,6 +120,8 @@ class UserModel {
       friends: friends ?? this.friends,
       friendRequestsSent: friendRequestsSent ?? this.friendRequestsSent,
       friendRequestsReceived: friendRequestsReceived ?? this.friendRequestsReceived,
+      mutedFriends: mutedFriends ?? this.mutedFriends,
+      hiddenHiveIds: hiddenHiveIds ?? this.hiddenHiveIds,
     );
   }
 }

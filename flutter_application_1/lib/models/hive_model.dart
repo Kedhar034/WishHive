@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum HivePrivacy { public, private, friends }
+enum HivePrivacy { public, private, friends, specific }
 
 class HiveModel {
   final String id;
@@ -8,11 +8,12 @@ class HiveModel {
   final String imageUrl;
   final String note;
   final HivePrivacy privacy;
+  final List<String> allowedViewerIds; // For HivePrivacy.specific
   final int itemCount;
   final double totalCost;
   final DateTime? createdAt;
   final String ownerId;
-  final String ownerDisplayName; // Added
+  final String ownerDisplayName;
 
   const HiveModel({
     required this.id,
@@ -20,11 +21,12 @@ class HiveModel {
     this.imageUrl = '',
     this.note = '',
     this.privacy = HivePrivacy.private,
+    this.allowedViewerIds = const [],
     this.itemCount = 0,
     this.totalCost = 0.0,
     this.createdAt,
     this.ownerId = '',
-    this.ownerDisplayName = '', // Added default
+    this.ownerDisplayName = '',
   });
 
   factory HiveModel.fromFirestore(DocumentSnapshot doc) {
@@ -35,11 +37,12 @@ class HiveModel {
       imageUrl: data['imageUrl'] as String? ?? '',
       note: data['note'] as String? ?? '',
       privacy: _parsePrivacy(data['privacy'] as String?),
+      allowedViewerIds: List<String>.from(data['allowedViewerIds'] ?? []),
       itemCount: (data['itemCount'] as num?)?.toInt() ?? 0,
       totalCost: (data['totalCost'] as num?)?.toDouble() ?? 0.0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       ownerId: data['ownerId'] as String? ?? '',
-      ownerDisplayName: data['ownerDisplayName'] as String? ?? '', // Added
+      ownerDisplayName: data['ownerDisplayName'] as String? ?? '',
     );
   }
 
@@ -49,12 +52,13 @@ class HiveModel {
       'imageUrl': imageUrl,
       'note': note,
       'privacy': privacy.name,
+      'allowedViewerIds': allowedViewerIds,
       'id': id,
       'itemCount': itemCount,
       'totalCost': totalCost,
       'createdAt': FieldValue.serverTimestamp(),
       'ownerId': ownerId,
-      'ownerDisplayName': ownerDisplayName, // Added
+      'ownerDisplayName': ownerDisplayName,
     };
   }
 
@@ -64,11 +68,12 @@ class HiveModel {
     String? imageUrl,
     String? note,
     HivePrivacy? privacy,
+    List<String>? allowedViewerIds,
     int? itemCount,
     double? totalCost,
     DateTime? createdAt,
     String? ownerId,
-    String? ownerDisplayName, // Added
+    String? ownerDisplayName,
   }) {
     return HiveModel(
       id: id ?? this.id,
@@ -76,11 +81,12 @@ class HiveModel {
       imageUrl: imageUrl ?? this.imageUrl,
       note: note ?? this.note,
       privacy: privacy ?? this.privacy,
+      allowedViewerIds: allowedViewerIds ?? this.allowedViewerIds,
       itemCount: itemCount ?? this.itemCount,
       totalCost: totalCost ?? this.totalCost,
       createdAt: createdAt ?? this.createdAt,
       ownerId: ownerId ?? this.ownerId,
-      ownerDisplayName: ownerDisplayName ?? this.ownerDisplayName, // Added
+      ownerDisplayName: ownerDisplayName ?? this.ownerDisplayName,
     );
   }
 
@@ -90,6 +96,8 @@ class HiveModel {
         return HivePrivacy.public;
       case 'friends':
         return HivePrivacy.friends;
+      case 'specific':
+        return HivePrivacy.specific;
       default:
         return HivePrivacy.private;
     }

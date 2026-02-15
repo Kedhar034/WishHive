@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firestore_service.dart';
 import '../models/wish_model.dart';
 import '../models/user_model.dart';
+import '../models/hive_model.dart'; // Add this import
 import '../services/upload_service.dart'; // Add this import
 
 export '../services/upload_service.dart';
@@ -58,10 +59,30 @@ final hiveListProvider = StreamProvider.autoDispose((ref) {
 // ─── Wish Providers ─────────────────────────────────────────────────
  
 /// Stream of wishes for a specific hive (returns typed WishModel list).
-final wishesByHiveProvider = StreamProvider.autoDispose.family<List<WishModel>, String>((ref, hiveId) {
+
+/// Stream of wishes for a specific hive (returns typed WishModel list).
+/// Now accepts a record (hiveId, ownerId) to support viewing friends' hives.
+final wishesByHiveProvider = StreamProvider.autoDispose.family<List<WishModel>, ({String hiveId, String ownerId})>((ref, args) {
   final uid = ref.watch(uidProvider);
   if (uid == null) return const Stream<List<WishModel>>.empty();
-  return ref.read(firestoreServiceProvider).wishesStream(uid, hiveId);
+  
+  // Use the ownerId passed in arguments. If empty, fall back to current user (though logic should handle this upstream)
+  final targetOwnerId = args.ownerId.isNotEmpty ? args.ownerId : uid;
+  
+  return ref.read(firestoreServiceProvider).wishesStream(targetOwnerId, args.hiveId);
+});
+
+// ─── Friend Feed Provider ───────────────────────────────────────────
+
+final friendFeedProvider = FutureProvider.autoDispose<List<HiveModel>>((ref) async {
+  final user = ref.watch(currentUserStreamProvider).value;
+  if (user == null || user.friends.isEmpty) return [];
+  
+  return ref.read(firestoreServiceProvider).getFriendsFeed(
+    user.friends, 
+    mutedFriendIds: user.mutedFriends,
+    hiddenHiveIds: user.hiddenHiveIds,
+  );
 });
 
 // ─── Upload Service Provider ────────────────────────────────────────
@@ -71,4 +92,23 @@ final uploadServiceProvider = NotifierProvider<UploadService, List<UploadTask>>(
 });
 
 // Alias for currentUserStreamProvider to fix compilation error
+// Alias for currentUserStreamProvider to fix compilation error
 final userProvider = currentUserStreamProvider;
+
+// ─── UI State Providers ─────────────────────────────────────────────
+
+/// Manages temporarily hidden hives (optimistic updates) across screens.
+class TemporarilyHiddenHivesNotifier extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => {};
+
+  void add(String id) {
+    state = {...state, id};
+  }
+
+  void remove(String id) {
+    state = state.difference({id});
+  }
+}
+
+final temporarilyHiddenHivesProvider = NotifierProvider<TemporarilyHiddenHivesNotifier, Set<String>>(TemporarilyHiddenHivesNotifier.new);

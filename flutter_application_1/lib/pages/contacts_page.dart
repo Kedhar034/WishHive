@@ -238,46 +238,68 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
       return const Center(child: Text('No pending requests'));
     }
 
-    return FutureBuilder<List<UserModel>>(
-      future: ref.read(firestoreServiceProvider).getUsers(requestIds),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        final users = snapshot.data ?? [];
-        if (users.isEmpty) {
-           return const Center(child: Text('No requests found'));
-        }
-
-        return ListView.builder(
-          itemCount: users.length,
-          itemBuilder: (context, index) {
-            final user = users[index];
-            return ListTile(
-              leading: AvatarImage(url: user.photoUrl),
-              title: Text(user.displayName),
-              subtitle: const Text('Wants to be your friend'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.check, color: Colors.green),
-                    onPressed: () => _acceptRequest(user.uid),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    onPressed: () => _rejectRequest(user.uid),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    // transform list of IDs into a stream of List<UserModel>?
+    // Actually, simpler: Just use a widget that watches a provider for THESE users.
+    // Or, since we want instant updates, we can just key the FutureBuilder?
+    // No, FutureBuilder is not 'instant' enough if the underlying data changes. 
+    // Ideally, we should stream each user document.
+    
+    // For now, let's allow manual refresh or auto-refresh by keying it to the length/IDs.
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {}); // Triggers rebuild of FutureBuilder
       },
+      child: FutureBuilder<List<UserModel>>(
+        // Key the FutureBuilder so it rebuilds when the list of IDs changes instantly
+        key: ValueKey(requestIds.join(',')), 
+        future: ref.read(firestoreServiceProvider).getUsers(requestIds),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+             // Allow retry
+             return Center(
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   Text('Error: ${snapshot.error}'),
+                   IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState((){}))
+                 ],
+               ));
+          }
+
+          final users = snapshot.data ?? [];
+          if (users.isEmpty) {
+             return const Center(child: Text('No requests found'));
+          }
+
+          return ListView.builder(
+            itemCount: users.length,
+            itemBuilder: (context, index) {
+              final user = users[index];
+              return ListTile(
+                leading: AvatarImage(url: user.photoUrl),
+                title: Text(user.displayName),
+                subtitle: const Text('Wants to be your friend'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.check, color: Colors.green),
+                      onPressed: () => _acceptRequest(user.uid),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      onPressed: () => _rejectRequest(user.uid),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

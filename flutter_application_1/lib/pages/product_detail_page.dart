@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/services/firestore_service.dart';
+import 'package:flutter_application_1/widgets/shimmer_loading.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_application_1/pages/full_screen_image_page.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 
 import '../models/wish_model.dart';
@@ -17,6 +21,7 @@ class ProductDetailPage extends ConsumerStatefulWidget {
   final String hiveId;
   final String ownerId;
   final String ownerDisplayName;
+  final String? heroTag; // New: Optional tag for correct animation
 
   const ProductDetailPage({
     required this.title,
@@ -24,6 +29,7 @@ class ProductDetailPage extends ConsumerStatefulWidget {
     required this.hiveId,
     this.ownerId = '',
     this.ownerDisplayName = '',
+    this.heroTag,
     super.key,
   });
 
@@ -92,12 +98,14 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
         errorBuilder: (_, __, ___) => _placeholderImage(),
       );
     } else if (ImageStorageService.isNetworkPath(path)) {
-      image = Image.network(
-        path,
+      image = CachedNetworkImage(
+        imageUrl: path,
         width: double.infinity,
         height: 200,
+        memCacheHeight: 500, // Optimize memory for header
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholderImage(),
+        placeholder: (_, __) => _placeholderImage(),
+        errorWidget: (_, __, ___) => _placeholderImage(),
       );
     } else {
       image = Image.asset(
@@ -147,12 +155,13 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
         errorBuilder: (_, __, ___) => _wishPlaceholder(),
       );
     } else if (ImageStorageService.isNetworkPath(imageUrl)) {
-      image = Image.network(
-        imageUrl,
+      image = CachedNetworkImage(
+        imageUrl: imageUrl,
         width: 52,
         height: 52,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _wishPlaceholder(),
+        placeholder: (_, __) => _wishPlaceholder(),
+        errorWidget: (_, __, ___) => _wishPlaceholder(),
       );
     } else {
       image = Image.asset(
@@ -186,17 +195,12 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final targetUid = widget.ownerId.isNotEmpty ? widget.ownerId : ref.watch(uidProvider);
-    final wishesStream = ref.watch(firestoreServiceProvider).wishesStream(targetUid!, widget.hiveId);
+    final wishesAsync = ref.watch(wishesByHiveProvider((hiveId: widget.hiveId, ownerId: targetUid!)));
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundLight,
-      body: StreamBuilder<List<WishModel>>(
-        stream: wishesStream,
-        builder: (context, snapshot) {
-          final wishes = snapshot.data ?? [];
-          final isLoading = snapshot.connectionState == ConnectionState.waiting;
-          final error = snapshot.error;
-
+      body: wishesAsync.when(
+        data: (wishes) {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
@@ -226,7 +230,29 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
                   background: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     child: Hero(
-                      tag: 'hive-${widget.hiveId}',
+                      tag: widget.heroTag ?? 'hive-${widget.hiveId}',
+                      flightShuttleBuilder: (
+                        BuildContext flightContext,
+                        Animation<double> animation,
+                        HeroFlightDirection flightDirection,
+                        BuildContext fromHeroContext,
+                        BuildContext toHeroContext,
+                      ) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            image: DecorationImage(
+                              image: CachedNetworkImageProvider(
+                                widget.imageUrl.isNotEmpty ? widget.imageUrl : AppConstants.fallbackImage,
+                                // Use a reasonable cache size for the header (e.g. 500px height)
+                                // This ensures we don't load 4K images for a phone header
+                                maxHeight: 500, 
+                              ),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        );
+                      },
                       child: _buildHeaderImage(),
                     ),
                   ),
@@ -278,17 +304,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
                 ),
               ),
 
-              if (isLoading)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: CircularProgressIndicator(color: AppTheme.primaryAmber),
-                  ),
-                )
-              else if (error != null)
-                SliverFillRemaining(
-                  child: Center(child: Text('Error: $error')),
-                )
-              else if (wishes.isEmpty)
+              if (wishes.isEmpty)
                 SliverFillRemaining(
                   child: FadeTransition(
                     opacity: _fadeAnim,
@@ -351,6 +367,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
             ],
           );
         },
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryAmber),
+        ),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }
@@ -376,7 +396,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
         hiveOwnerId: widget.ownerId.isNotEmpty ? widget.ownerId : uid,
         wishId: wish.id, 
         fulfillerId: uid, 
-        fulfillerName: user.displayName,
+        fulfillerName: user.displayName.isNotEmpty ? user.displayName : 'A Friend',
         isOwnerOverride: _isOwner, // Pass owner status to service if needed, or handle logic here.
       );
     } catch (e) {
@@ -478,9 +498,9 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
   }
 }
 
-class _WishTile extends StatelessWidget {
+class _WishTile extends StatefulWidget {
   final WishModel wish;
-  final bool isCompleted;
+  final bool isCompleted; // Kept for compatibility if used, though we derive from wish
   final bool isOwner;
   final VoidCallback onToggle;
   final VoidCallback? onLinkTap;
@@ -500,145 +520,227 @@ class _WishTile extends StatelessWidget {
   });
 
   @override
+  State<_WishTile> createState() => _WishTileState();
+}
+
+class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+      lowerBound: 0.8,
+      upperBound: 1.0,
+    );
+    
+    _scaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut,
+    );
+
+    // Initial check without animation
+    if (widget.wish.fulfilledBy.isNotEmpty) {
+      _controller.value = 1.0; 
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _WishTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final isFulfilled = widget.wish.fulfilledBy.isNotEmpty;
+    final wasFulfilled = oldWidget.wish.fulfilledBy.isNotEmpty;
+
+    if (isFulfilled && !wasFulfilled) {
+      // Trigger pop animation
+      _controller.forward(from: 0.0);
+    } else if (!isFulfilled && wasFulfilled) {
+      _controller.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: isCompleted
-            ? Colors.grey.shade50
-            : AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isCompleted
-              ? Colors.grey.shade200
-              : AppTheme.divider,
-          width: 1,
+    final isCompleted = widget.wish.fulfilledBy.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12),
         ),
-        boxShadow: isCompleted
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: onToggle,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isCompleted
-                      ? AppTheme.success
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: isCompleted
-                        ? AppTheme.success
-                        : Colors.grey.shade400,
-                    width: 2,
-                  ),
-                ),
-                child: isCompleted
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            if (wish.imageUrl.isNotEmpty) ...[
-              buildImage(wish.imageUrl),
-              const SizedBox(width: 10),
-            ],
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    wish.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      decoration:
-                          isCompleted ? TextDecoration.lineThrough : null,
-                      color: isCompleted ? Colors.grey : null,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (wish.subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      wish.subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isCompleted
-                            ? Colors.grey
-                            : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (wish.cost > 0) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '₹${wish.cost.toStringAsFixed(2)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isCompleted
-                            ? Colors.grey
-                            : AppTheme.success,
-                        fontWeight: FontWeight.w600,
+        child: InkWell(
+          onTap: widget.onToggle, // Allow everyone to toggle (owner logic handled in callback)
+          onLongPress: widget.isOwner ? widget.onEdit : null, // Edit on long press for owner
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                if (!widget.isOwner)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCompleted
+                              ? AppTheme.success
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: isCompleted
+                                ? AppTheme.success
+                                : Colors.grey.shade400,
+                            width: 2,
+                          ),
+                        ),
+                        child: isCompleted
+                            ? const Icon(Icons.check, size: 16, color: Colors.white)
+                            : null,
                       ),
                     ),
-                  ],
-                  if (isCompleted)
-                     Padding(
-                       padding: const EdgeInsets.only(top: 2.0),
-                       child: Text(
-                         'Fulfilled by ${wish.fulfilledByName}',
-                         style: theme.textTheme.labelSmall?.copyWith(
-                           color: AppTheme.primaryAmber,
-                           fontWeight: FontWeight.bold,
+                  ),
+                
+                if (widget.wish.imageUrl.isNotEmpty) ...[
+                   Hero(
+                     tag: 'wish_image_${widget.wish.id}',
+                     child: Material(
+                       color: Colors.transparent,
+                       child: InkWell(
+                         onTap: () {
+                           Navigator.push(
+                             context,
+                             MaterialPageRoute(
+                               builder: (_) => FullScreenImagePage(
+                                 imageUrl: widget.wish.imageUrl,
+                                 heroTag: 'wish_image_${widget.wish.id}',
+                               ),
+                             ),
+                           );
+                         },
+                         borderRadius: BorderRadius.circular(8),
+                         child: ClipRRect(
+                           borderRadius: BorderRadius.circular(8),
+                           child: SizedBox(
+                             width: 48, 
+                             height: 48,
+                             child: widget.buildImage(widget.wish.imageUrl),
+                           ),
                          ),
                        ),
                      ),
+                   ),
+                   const SizedBox(width: 12),
                 ],
-              ),
-            ),
 
-            if (onLinkTap != null)
-              IconButton(
-                icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                color: theme.colorScheme.primary,
-                onPressed: onLinkTap,
-                tooltip: 'Open link',
-                visualDensity: VisualDensity.compact,
-              ),
-            if (isOwner) ...[
-              IconButton(
-                icon: Icon(Icons.edit_outlined,
-                    size: 20, color: theme.colorScheme.primary),
-                onPressed: onEdit,
-                tooltip: 'Edit',
-                visualDensity: VisualDensity.compact,
-              ),
-              IconButton(
-                icon: Icon(Icons.delete_outline,
-                    size: 20, color: Colors.red.shade300),
-                onPressed: onDelete,
-                tooltip: 'Delete',
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.wish.name,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          decoration: isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                          color: isCompleted
+                              ? Colors.grey
+                              : theme.textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      if (isCompleted)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: Text(
+                            'Fulfilled',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppTheme.primaryAmber,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        
+                      // Link Button
+                      if (widget.wish.link.isNotEmpty)
+                         Padding(
+                           padding: const EdgeInsets.only(top: 4),
+                           child: GestureDetector(
+                             onTap: widget.onLinkTap,
+                             child: Row(
+                               mainAxisSize: MainAxisSize.min,
+                               children: [
+                                 Icon(
+                                   Icons.link, 
+                                   size: 16, 
+                                   color: isCompleted ? Colors.grey : theme.colorScheme.primary
+                                 ),
+                                 const SizedBox(width: 4),
+                                 Flexible(
+                                   child: Text(
+                                     'View Link',
+                                     style: theme.textTheme.bodySmall?.copyWith(
+                                       color: isCompleted ? Colors.grey : theme.colorScheme.primary,
+                                       fontWeight: FontWeight.w600,
+                                       decoration: isCompleted ? TextDecoration.lineThrough : null,
+                                     ),
+                                     maxLines: 1,
+                                     overflow: TextOverflow.ellipsis,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ),
+                         ),
+                    ],
+                  ),
+                ),
+                
+                if (widget.isOwner)
+                   Row(
+                     mainAxisSize: MainAxisSize.min,
+                     children: [
+                       if (isCompleted)
+                         Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(Icons.check_circle, size: 20, color: AppTheme.success),
+                         ),
+                       PopupMenuButton<String>(
+                         icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                         onSelected: (val) {
+                           if (val == 'edit') widget.onEdit?.call();
+                           if (val == 'delete') widget.onDelete?.call();
+                         },
+                         itemBuilder: (_) => [
+                           const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                           const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                         ],
+                       ),
+                     ],
+                   )
+                else if (widget.onLinkTap != null && !isCompleted && widget.wish.link.isNotEmpty)
+                  // Show link button for non-owners if we didn't show it inline (redundant but safe)
+                  // Actually, let's just stick to inline.
+                  const SizedBox.shrink(),
+              ],
+            ),
+          ),
         ),
       ),
     );

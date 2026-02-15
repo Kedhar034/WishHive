@@ -1,5 +1,6 @@
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +20,7 @@ import 'create_wish_sheet.dart';
 import 'welcome_page.dart';
 import 'contacts_page.dart';
 import 'friend_feed_page.dart';
+import 'hidden_hives_page.dart';
 import 'marketplace_page.dart';
 import 'settings_page.dart';
 import '../services/metadata_service.dart';
@@ -32,6 +34,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
+  // Optimistic hiding state for friend slider moved to provider
   int _currentNavIndex = 0;
   late StreamSubscription _intentDataStreamSubscription;
   bool _isHandlingShare = false;
@@ -74,20 +77,33 @@ class _HomePageState extends ConsumerState<HomePage> {
     String? foundImage;
     String? foundText;
 
+    // Helper regex that handles URLs embedded in text better.
+    // Enhanced for Blinkit/Amazon/General: Enforces http/https to avoid false positives in text, 
+    // but captures the full URL correctly even if surrounded by other characters.
+    final urlRegExp = RegExp(
+      r'https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)',
+      caseSensitive: false,
+    );
+
     // Iterate through all shared content to find best URL and Text
     for (final file in files) {
       if (file.type == SharedMediaType.text) {
         // If we haven't found a text yet, or this one is longer (more likely to be description), keep it.
-        if (foundText == null || file.path.length > foundText.length) {
+        // But for Blinkit, the URL might be INSIDE the text.
+        if (foundText == null || file.path.length > (foundText?.length ?? 0)) {
             foundText = file.path;
         }
         
         // Try extract URL if we haven't found one yet
         if (foundUrl == null) {
-            final urlRegExp = RegExp(r'(https?:\/\/[^\s]+)');
-            final match = urlRegExp.firstMatch(file.path);
-            if (match != null) {
-              foundUrl = match.group(0);
+            // Find ALL matches, prioritize HTTP ones
+            final matches = urlRegExp.allMatches(file.path);
+            for (final match in matches) {
+              final val = match.group(0);
+              if (val != null) {
+                 foundUrl = val;
+                 break; 
+              }
             }
         }
       } else if (file.type == SharedMediaType.image) {
@@ -95,30 +111,37 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
     }
 
-    // Fallback: Check if the text itself IS a URL if regex didn't catch it inside text
+    // Fallback: Check if the text itself contains a URL if regex didn't catch it inside loop
     if (foundUrl == null && foundText != null) {
-         final urlRegExp = RegExp(r'(https?:\/\/[^\s]+)');
-         final match = urlRegExp.firstMatch(foundText);
-         foundUrl = match?.group(0);
+         final matches = urlRegExp.allMatches(foundText);
+         for (final match in matches) {
+            final val = match.group(0);
+            if (val != null) {
+                foundUrl = val;
+                break;
+            }
+         }
     }
 
     String? initialTitle;
     String? initialImage = foundImage; // Use shared image by default
     String? finalUrl = foundUrl;
+    
+    // Normalize URL if it starts with www (Legacy handling, though regex enforces http now)
+    if (finalUrl != null && !finalUrl.startsWith('http')) {
+      finalUrl = 'https://$finalUrl';
+    }
 
-    if (foundUrl != null) {
+    if (finalUrl != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Fetching product details...')),
         );
       }
 
-      final metadata = await MetadataService.extract(foundUrl);
+      final metadata = await MetadataService.extract(finalUrl);
       if (metadata != null) {
         initialTitle = metadata.title;
-        // Prefer metadata image if available (usually cleaner product shot)
-        // unless we want to prioritize the shared user image? 
-        // Metadata image is better for "Wish" visually usually.
         if (metadata.imageUrl?.isNotEmpty ?? false) {
           initialImage = metadata.imageUrl;
         }
@@ -187,7 +210,64 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  void _openHiveDetail(HiveModel hive) {
+  void _showHideHiveDialog(HiveModel hive) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hide Hive?'),
+        content: Text(
+            'Do you want to hide "${hive.title}" from your feed?\nYou can undo this action immediately.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                // Optimistic Update: Hide immediately from slider
+                ref.read(temporarilyHiddenHivesProvider.notifier).add(hive.id);
+
+                // Hide in backend
+                await ref.read(firestoreServiceProvider).hideHive(hive.id);
+                
+                // Do NOT invalidate immediately to avoid jitter
+                // ref.invalidate(friendFeedProvider); 
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Hidden "${hive.title}"'),
+                      action: SnackBarAction(
+                        label: 'UNDO',
+                        onPressed: () async {
+                           ref.read(temporarilyHiddenHivesProvider.notifier).remove(hive.id);
+                           await ref.read(firestoreServiceProvider).unhideHive(hive.id);
+                           ref.invalidate(friendFeedProvider);
+                        },
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                // Revert if failed
+                ref.read(temporarilyHiddenHivesProvider.notifier).remove(hive.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to hide: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Hide', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openHiveDetail(HiveModel hive, {String? heroTag}) {
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -200,6 +280,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           imageUrl: hive.imageUrl,
           ownerId: hive.ownerId,
           ownerDisplayName: hive.ownerDisplayName,
+          heroTag: heroTag,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -224,84 +305,165 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // Pre-extract home content to keep build clean
     Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
-      return hiveList.when(
-        data: (snapshot) {
-          final hiveDocs = snapshot.docs;
-          if (hiveDocs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.hive_outlined,
-                    size: 80,
-                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No hives yet',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
+      final friendHivesAsync = ref.watch(friendFeedProvider);
+      final temporarilyHidden = ref.watch(temporarilyHiddenHivesProvider);
+
+      return CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // 1. Friend Hives Section (Horizontal Slider)
+          friendHivesAsync.when(
+            data: (allHives) {
+              final hives = allHives.where((h) => !temporarilyHidden.contains(h.id)).toList();
+              if (hives.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+              return SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+                      child: Text(
+                        'From Your Friends',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap + to create your first hive!',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 100),
-            itemCount: hiveDocs.length,
-            itemBuilder: (context, index) {
-              final doc = hiveDocs[index];
-              final hive = HiveModel.fromFirestore(doc);
-
-              return GestureDetector(
-                onTap: () => _openHiveDetail(hive),
-                onLongPress: () => _editHive(hive),
-                child: HiveCard(
-                  heroTag: 'hive-${hive.id}',
-                  title: hive.title,
-                  items: hive.itemCount,
-                  price: hive.totalCost,
-                  imageUrl: hive.imageUrl.isNotEmpty
-                      ? hive.imageUrl
-                      : AppConstants.fallbackImage,
-                  ownerName: (hive.ownerId != uid && hive.ownerDisplayName != null)
-                      ? hive.ownerDisplayName
-                      : null,
+                    SizedBox(
+                      height: 220, // Height for the horizontal cards
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: hives.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          final hive = hives[index];
+                          return SizedBox(
+                            width: 160, // Fixed width for horizontal items
+                            child: GestureDetector(
+                              onTap: () => _openHiveDetail(hive, heroTag: 'friend-hive-${hive.id}'),
+                              onLongPress: () => _showHideHiveDialog(hive),
+                              child: HiveCard(
+                                heroTag: 'friend-hive-${hive.id}',
+                                title: hive.title,
+                                items: hive.itemCount,
+                                price: hive.totalCost,
+                                imageUrl: hive.imageUrl.isNotEmpty
+                                    ? hive.imageUrl
+                                    : AppConstants.fallbackImage,
+                                ownerName: hive.ownerDisplayName,
+                                isCompact: true, // Use compact mode for slider
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'My Hives',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
               );
             },
-          );
-        },
-        loading: () => ListView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          itemCount: 4,
-          itemBuilder: (context, index) {
-            return const Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: _HiveCardSkeleton(),
-            );
-          },
-        ),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 12),
-              Text('Error loading hives:\n$e', textAlign: TextAlign.center),
-            ],
+            loading: () => const _FriendFeedSkeleton(),
+            error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
           ),
-        ),
+
+          // 2. My Hives Grid (Vertical)
+          hiveList.when(
+            data: (snapshot) {
+              final hiveDocs = snapshot.docs;
+              if (hiveDocs.isEmpty) {
+                return SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.hive_outlined,
+                          size: 80,
+                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hives yet',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap + to create your first hive!',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final doc = hiveDocs[index];
+                      final hive = HiveModel.fromFirestore(doc);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: GestureDetector(
+                          onTap: () => _openHiveDetail(hive, heroTag: 'hive-${hive.id}'),
+                          onLongPress: () => _editHive(hive),
+                          child: HiveCard(
+                            heroTag: 'hive-${hive.id}',
+                            title: hive.title,
+                            items: hive.itemCount,
+                            price: hive.totalCost,
+                            imageUrl: hive.imageUrl.isNotEmpty
+                                ? hive.imageUrl
+                                : AppConstants.fallbackImage,
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: hiveDocs.length,
+                  ),
+                ),
+              );
+            },
+            loading: () => SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  return const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                    child: _HiveCardSkeleton(),
+                  );
+                },
+                childCount: 4,
+              ),
+            ),
+            error: (e, _) => SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text('Error loading hives: $e', textAlign: TextAlign.center),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -340,6 +502,32 @@ class _HomePageState extends ConsumerState<HomePage> {
                     },
                     icon: const Icon(Icons.sort_rounded, size: 28), // Three dashes style
                     tooltip: 'Sort & Filter',
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 28, color: Colors.black87),
+                    tooltip: 'More Options',
+                    onSelected: (value) {
+                      if (value == 'hidden_hives') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const HiddenHivesPage()),
+                        );
+                      }
+                    },
+                    itemBuilder: (BuildContext context) {
+                      return [
+                        const PopupMenuItem<String>(
+                          value: 'hidden_hives',
+                          child: Row(
+                            children: [
+                              Icon(Icons.visibility_off_outlined, color: Colors.grey),
+                              SizedBox(width: 8),
+                              Text('Hidden Hives'),
+                            ],
+                          ),
+                        ),
+                      ];
+                    },
                   ),
                 ],
               ),
@@ -419,6 +607,48 @@ class _HomePageState extends ConsumerState<HomePage> {
           
           const Icon(Icons.shopping_bag_outlined, size: 28),
           const Icon(Icons.settings_outlined, size: 28),
+        ],
+      ),
+    );
+  }
+}
+
+class _FriendFeedSkeleton extends StatelessWidget {
+  const _FriendFeedSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+            child: ShimmerLoading(
+              child: Container(
+                height: 20, 
+                width: 150, 
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 220,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              scrollDirection: Axis.horizontal,
+              itemCount: 3,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, __) => const SizedBox(
+                width: 160,
+                child: _HiveCardSkeleton(), // Reusing the existing vertical skeleton but constrained by width
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

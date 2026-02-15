@@ -30,9 +30,15 @@ class FirestoreService {
   Future<void> updateUser(UserModel user) async {
     try {
       final data = user.toFirestore();
-      // Remove null values to avoid overwriting existing data (like username) with null
-      // when syncing from Auth providers that don't provide all fields.
+      // Remove null values to avoid overwriting existing data with null
       data.removeWhere((key, value) => value == null);
+
+      // CRITICAL FIX: Prevent overwriting social graph arrays with empty lists
+      // when updating profile details (e.g. username/photo).
+      // These fields are managed efficiently by atomic arrayUnion/arrayRemove operations.
+      data.remove('friends');
+      data.remove('friendRequestsSent');
+      data.remove('friendRequestsReceived');
 
       await _usersCollection.doc(user.uid).set(
             data,
@@ -198,8 +204,39 @@ class FirestoreService {
       });
       
       await batch.commit();
+      await batch.commit();
     } catch (e) {
       debugPrint('Error rejecting friend request: $e');
+      rethrow;
+    }
+  }
+
+  /// Mute a friend (hide their hives from feed).
+  Future<void> muteFriend(String friendId) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    try {
+      await _usersCollection.doc(uid).update({
+        'mutedFriends': FieldValue.arrayUnion([friendId])
+      });
+    } catch (e) {
+      debugPrint('Error muting friend: $e');
+      rethrow;
+    }
+  }
+
+  /// Unmute a friend.
+  Future<void> unmuteFriend(String friendId) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    try {
+      await _usersCollection.doc(uid).update({
+        'mutedFriends': FieldValue.arrayRemove([friendId])
+      });
+    } catch (e) {
+      debugPrint('Error unmuting friend: $e');
       rethrow;
     }
   }
@@ -303,6 +340,7 @@ class FirestoreService {
         'imageUrl': hive.imageUrl,
         'note': hive.note,
         'privacy': hive.privacy.name,
+        'allowedViewerIds': hive.allowedViewerIds,
       });
     } catch (e) {
       debugPrint('Error updating hive: $e');
@@ -512,35 +550,84 @@ class FirestoreService {
 
   /// Fetch a feed of hives from friends.
   /// 
-  /// Since Firestore doesn't support easy "OR" queries across many users, 
-  /// we fetch hives for each friend individually and merge them client-side.
-  /// This is suitable for small friend counts. For scale, we'd need a dedicated feed collection.
-  Future<List<HiveModel>> getFriendsFeed(List<String> friendIds) async {
-    if (friendIds.isEmpty) return [];
+  /// [friends] list provides IDs and display names (for accurate attribution).
+  /// [mutedFriendIds] allows filtering out hidden friends.
+  // Friend Feed
+  Future<List<HiveModel>> getFriendsFeed(
+    List<FriendProfile> friends, {
+    List<String> mutedFriendIds = const [],
+    List<String> hiddenHiveIds = const [],
+    bool onlyHidden = false,
+  }) async {
+    if (friends.isEmpty) return [];
+    final uid = _uid;
 
     try {
-      // Chunk friends to avoid hitting Firestore limits if we were using 'whereIn' (max 30).
-      // But here we are using collectionGroup with 'ownerId' check? 
-      // No, collectionGroup queries all hives.
-      // Easiest robust way for < 50 friends:
-      // Loop through friends, get their latest public/friend hives.
-      
       List<HiveModel> allHives = [];
-      const int hivesPerFriend = 3; // Get top 3 latest hives per friend to keep it fast
+      const int hivesPerFriend = 5; 
 
-      // Parallel fetch
-      final futures = friendIds.map((fid) async {
-        final query = _hivesCollection(fid)
-            .where('privacy', whereIn: ['public', 'friends']) // Only public or friend-visible
-            .orderBy('createdAt', descending: true)
+      // Filter out muted friends and map to IDs
+      final activeFriends = friends.where((f) => !mutedFriendIds.contains(f.uid)).toList();
+
+      // Parallel fetch for each friend
+      final futures = activeFriends.map((friend) async {
+        final fid = friend.uid;
+        final collection = _hivesCollection(fid);
+        
+        // Query 1: Public or Friends-only
+        final queryStandard = collection
+            .where('privacy', whereIn: ['public', 'friends'])
             .limit(hivesPerFriend);
             
-        final snapshot = await query.get();
-        return snapshot.docs.map((doc) {
-           final hive = HiveModel.fromFirestore(doc);
-           // Manually attach ownerId if not present (though it should be in the model)
-           return hive.copyWith(ownerId: fid); 
-        }).toList();
+        // Query 2: Specific Access
+        Query? querySpecific;
+        if (uid != null) {
+           querySpecific = collection
+            .where('privacy', isEqualTo: 'specific_friends')
+            .where('allowedViewerIds', arrayContains: uid)
+            .limit(hivesPerFriend);
+        }
+
+        final results = await Future.wait([
+          queryStandard.get(),
+          if (querySpecific != null) querySpecific.get(),
+        ]);
+
+        List<HiveModel> friendHives = [];
+        for (var snapshot in results) {
+           if (snapshot != null) {
+              final docs = (snapshot as QuerySnapshot).docs;
+              for (var doc in docs) {
+                  var hive = HiveModel.fromFirestore(doc);
+                  
+                  // FIX: Override ownerDisplayName with friend's current name
+                  hive = hive.copyWith(
+                    ownerDisplayName: friend.displayName,
+                    ownerId: fid, 
+                  );
+
+                  // Deduplicate & Filter Hidden Hives
+                  final isHidden = hiddenHiveIds.contains(hive.id);
+
+                  if (onlyHidden) {
+                    // Show ONLY hidden hives
+                    if (isHidden) {
+                       if (!friendHives.any((h) => h.id == hive.id)) {
+                          friendHives.add(hive);
+                       }
+                    }
+                  } else {
+                    // Show ONLY visible hives (default feed)
+                    if (!isHidden) {
+                       if (!friendHives.any((h) => h.id == hive.id)) {
+                          friendHives.add(hive);
+                       }
+                    }
+                  }
+              }
+           }
+        }
+        return friendHives;
       });
 
       final List<List<HiveModel>> results = await Future.wait(futures);
@@ -561,5 +648,23 @@ class FirestoreService {
       debugPrint('Error fetching friend feed: $e');
       return [];
     }
+  }
+
+  /// Hide a specific hive from the feed.
+  Future<void> hideHive(String hiveId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _usersCollection.doc(uid).update({
+      'hiddenHiveIds': FieldValue.arrayUnion([hiveId]),
+    });
+  }
+
+  /// Unhide a specific hive.
+  Future<void> unhideHive(String hiveId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _usersCollection.doc(uid).update({
+      'hiddenHiveIds': FieldValue.arrayRemove([hiveId]),
+    });
   }
 }

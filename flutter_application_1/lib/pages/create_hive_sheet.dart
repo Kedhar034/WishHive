@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hive_model.dart';
+import '../models/user_model.dart';
+import '../providers/providers.dart';
 import '../services/firestore_service.dart';
 import '../services/image_storage_service.dart';
 import '../widgets/image_picker_widget.dart';
@@ -23,6 +27,7 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
   File? _selectedImage;
   String? _networkImageUrl;
   HivePrivacy _privacy = HivePrivacy.private;
+  List<String> _allowedViewerIds = [];
   bool _isLoading = false;
 
   bool get _isEditing => widget.hiveToEdit != null;
@@ -35,6 +40,7 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
     _noteController = TextEditingController(text: hive?.note ?? '');
     if (hive != null) {
       _privacy = hive.privacy;
+      _allowedViewerIds = List.from(hive.allowedViewerIds);
       if (hive.imageUrl.isNotEmpty) {
         if (ImageStorageService.isLocalPath(hive.imageUrl)) {
           // Check if it's a file or asset
@@ -89,6 +95,7 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
           imageUrl: imageUrl,
           note: _noteController.text.trim(),
           privacy: _privacy,
+          allowedViewerIds: _allowedViewerIds,
         );
         await FirestoreService().updateHive(updatedHive);
         if (mounted) {
@@ -104,6 +111,7 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
           imageUrl: imageUrl,
           note: _noteController.text.trim(),
           privacy: _privacy,
+          allowedViewerIds: _allowedViewerIds,
         );
         await FirestoreService().createHive(hive);
         if (mounted) {
@@ -237,9 +245,66 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
                             icon: Icons.lock,
                             value: HivePrivacy.private,
                           ),
+                          Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
+                          _buildPrivacyOption(
+                            theme,
+                            title: 'Specific Friends',
+                            subtitle: 'Visible to selected friends',
+                            icon: Icons.person_add,
+                            value: HivePrivacy.specific,
+                          ),
                         ],
                       ),
                     ),
+                    if (_privacy == HivePrivacy.specific)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Consumer(
+                          builder: (context, ref, child) {
+                             final user = ref.watch(currentUserStreamProvider).value;
+                             final friends = user?.friends ?? [];
+                             return Column(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 ElevatedButton.icon(
+                                   onPressed: () => _showFriendPicker(context, friends),
+                                   icon: const Icon(Icons.person_add_alt_1),
+                                   label: Text(_allowedViewerIds.isEmpty
+                                       ? 'Select Friends'
+                                       : '${_allowedViewerIds.length} Friends Selected'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: theme.colorScheme.secondaryContainer,
+                                      foregroundColor: theme.colorScheme.onSecondaryContainer,
+                                    ),
+                                 ),
+                                 if (_allowedViewerIds.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: _allowedViewerIds.map((id) {
+                                           final friend = friends.firstWhere(
+                                             (f) => f.uid == id, 
+                                             orElse: () => FriendProfile(uid: id, displayName: 'Unknown', email: ''),
+                                           );
+                                           return Chip(
+                                             label: Text(friend.displayName), // displayName from FriendProfile
+                                             onDeleted: () {
+                                               setState(() {
+                                                 _allowedViewerIds.remove(id);
+                                               });
+                                             },
+                                             visualDensity: VisualDensity.compact,
+                                           );
+                                        }).toList(),
+                                      ),
+                                    ),
+                               ],
+                             );
+                          },
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -337,5 +402,134 @@ class _CreateHiveSheetState extends State<CreateHiveSheet> {
         ),
       ),
     );
+  }
+  void _showFriendPicker(BuildContext context, List<FriendProfile> friends) {
+    if (friends.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have no friends yet to share with!')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return StatefulBuilder(
+              builder: (context, setStateSheet) {
+                return Column(
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Select Friends',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              this.setState(() {}); // Update parent UI
+                              Navigator.pop(context);
+                            },
+                            child: const Text('Done'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: friends.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final friend = friends[index];
+                          final isSelected = _allowedViewerIds.contains(friend.uid);
+                          
+                          return Container( // Wrap for styling
+                            decoration: BoxDecoration(
+                              color: isSelected 
+                                  ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: isSelected 
+                                  ? Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5))
+                                  : null,
+                            ),
+                            child: CheckboxListTile(
+                              value: isSelected,
+                              activeColor: Theme.of(context).colorScheme.primary,
+                              checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              title: Text(
+                                friend.displayName.isNotEmpty ? friend.displayName : 'Unknown User',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(friend.email, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                              secondary: CircleAvatar(
+                                radius: 20,
+                                backgroundImage: (friend.photoUrl?.isNotEmpty ?? false)
+                                    ? CachedNetworkImageProvider(friend.photoUrl!)
+                                    : null,
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: (friend.photoUrl?.isEmpty ?? true)
+                                    ? Text(
+                                        friend.displayName.isNotEmpty ? friend.displayName[0].toUpperCase() : '?',
+                                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      )
+                                    : null,
+                              ),
+                              onChanged: (bool? checked) {
+                                setStateSheet(() {
+                                   if (checked == true) {
+                                     if (!_allowedViewerIds.contains(friend.uid)) {
+                                       _allowedViewerIds.add(friend.uid);
+                                     }
+                                   } else {
+                                     _allowedViewerIds.remove(friend.uid);
+                                   }
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+       // Ensure parent updates when sheet is closed (e.g. by dragging down)
+       this.setState(() {});
+    });
   }
 }

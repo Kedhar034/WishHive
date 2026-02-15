@@ -75,14 +75,26 @@ class MetadataService {
             final match = regExp.firstMatch(html);
             return match?.group(1);
           }
+
+          // Helper to extract content from itemprop (Schema.org)
+           String? getItemProp(String property) {
+            final RegExp regExp = RegExp(
+              '<meta[^>]*itemprop=["\']$property["\'][^>]*content=["\']([^"\']+)["\']',
+              caseSensitive: false,
+            );
+            final match = regExp.firstMatch(html);
+            return match?.group(1);
+          }
           
           // Try OG Image again manually
           image = getMeta('og:image');
+          image ??= getMeta('og:image:secure_url'); // HTTPS variant
           
           // Try Twitter Image
           image ??= getMeta('twitter:image');
-          
-          // Try link rel=image_src (common in some older CMS)
+          image ??= getMeta('twitter:image:src');
+
+          // Try Link Rel Image Src
           if (image == null) {
              final RegExp linkRegExp = RegExp(
               '<link[^>]*rel=["\']image_src["\'][^>]*href=["\']([^"\']+)["\']',
@@ -91,9 +103,75 @@ class MetadataService {
              final match = linkRegExp.firstMatch(html);
              image = match?.group(1);
           }
+
+          // Try Itemprop Image (Schema.org)
+          if (image == null) {
+            image = getItemProp('image');
+          }
           
-          // Last resort: find the first large image in the body (risky but better than nothing?)
-          // skipping for now to avoid garbage icons, but we could add if needed.
+          // Try Preload as Image (often the main LCP image)
+          if (image == null) {
+            final RegExp preloadRegExp = RegExp(
+              '<link[^>]*rel=["\']preload["\'][^>]*as=["\']image["\'][^>]*href=["\']([^"\']+)["\']',
+              caseSensitive: false,
+            );
+            final match = preloadRegExp.firstMatch(html);
+            image = match?.group(1);
+          }
+
+          // Fix relative URLs
+          if (image != null && !image!.startsWith('http')) {
+             final uri = Uri.parse(url);
+             if (image!.startsWith('//')) {
+               image = '${uri.scheme}:$image';
+             } else if (image!.startsWith('/')) {
+               image = '${uri.scheme}://${uri.host}$image';
+             } else {
+               image = '${uri.scheme}://${uri.host}/$image';
+             }
+          }
+
+          // Try Link Rel Image Src
+          if (image == null) {
+             final RegExp linkRegExp = RegExp(
+              '<link[^>]*rel=["\']image_src["\'][^>]*href=["\']([^"\']+)["\']',
+              caseSensitive: false,
+            );
+             final match = linkRegExp.firstMatch(html);
+             image = match?.group(1);
+          }
+
+          // Try Itemprop Image (Schema.org)
+          if (image == null) {
+            final RegExp itemPropRegExp = RegExp(
+              '<meta[^>]*itemprop=["\']image["\'][^>]*content=["\']([^"\']+)["\']',
+              caseSensitive: false,
+            );
+            final match = itemPropRegExp.firstMatch(html);
+            image = match?.group(1);
+          }
+          
+          // Try Preload as Image (often the main LCP image)
+          if (image == null) {
+            final RegExp preloadRegExp = RegExp(
+              '<link[^>]*rel=["\']preload["\'][^>]*as=["\']image["\'][^>]*href=["\']([^"\']+)["\']',
+              caseSensitive: false,
+            );
+            final match = preloadRegExp.firstMatch(html);
+            image = match?.group(1);
+          }
+
+          // Fix relative URLs
+          if (image != null && !image.startsWith('http')) {
+             final uri = Uri.parse(url);
+             if (image.startsWith('//')) {
+               image = '${uri.scheme}:$image';
+             } else if (image.startsWith('/')) {
+               image = '${uri.scheme}://${uri.host}$image';
+             } else {
+               image = '${uri.scheme}://${uri.host}/$image';
+             }
+          }
         } catch (e) {
           // ignore manual parse errors
         }
