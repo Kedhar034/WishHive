@@ -1,0 +1,19 @@
+{
+  "appTitle": "Beehive",
+  "home": "होम",
+  "contacts": "संपर्क",
+  "marketplace": "बाज़ार",
+  "settings": "सेटिंग्स",
+  "createHive": "एक छत्ता बनाएँ",
+  "createWish": "एक इच्छा करें",
+  "friends": "मित्र",
+  "requests": "अनुरोध",
+  "searchFriends": "नए दोस्तों को खोजें और जोड़ें",
+  "privacy": "गोपनीयता",
+  "language": "भाषा",
+  "logout": "लॉग आउट",
+  "shareApp": "Beehive साझा करें",
+  "privacyPolicy": "गोपनीयता नीति",
+  "version": "संस्करण",
+  "profile": "प्रोफ़ाइल"
+}

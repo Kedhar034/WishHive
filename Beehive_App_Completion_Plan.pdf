@@ -1,0 +1,68 @@
+# Beehive App Completion & Enhancement Plan
+
+## 1. Project Overview
+Beehive is a marketplace and product recommendation app that allows users to:
+- Store and manage product images and details
+- Categorize products and link them to e-commerce or other websites
+- Browse a marketplace of user-shared products (anonymized)
+- Receive product recommendations
+- Support multiple currencies and countries
+
+## 2. Current State
+- UI/UX partially designed
+- User images not yet stored in filesystem
+- Marketplace and recommendation features not fully implemented
+- Currency and localization support not complete
+
+## 3. System Design & Implementation Plan
+
+### A. User Image Storage
+- Store user-uploaded images in the device filesystem (using `path_provider` and `image_picker`)
+- Reference image paths in the database (Firebase/SQLite)
+
+### B. Product Categorization & Linking
+- Allow users to add products to categories
+- Enable direct linking to external websites (e-commerce, etc.)
+- Auto-create categories if not present
+
+### C. Marketplace Feature
+- Display anonymized product listings from all users
+- Show product details and purchase links
+- No user-identifiable information displayed
+
+### D. Recommendation System (AI Capabilities)
+- Suggest products based on user interests, browsing, and purchase history
+- Use collaborative filtering or content-based filtering (can use TensorFlow Lite or integrate with a cloud AI service)
+- Optionally, recommend trending products in the marketplace
+
+### E. Multi-Currency & Localization
+- Detect user country and currency (using device locale or user selection)
+- Convert prices using a currency API (e.g., exchangerate-api.com)
+- Localize UI strings for supported languages
+
+### F. Additional AI Features (Future Scope)
+- Visual search: Let users search for products by uploading a photo
+- Chatbot for product recommendations and support
+- Sentiment analysis on product reviews
+- Personalized notifications and offers
+
+## 4. Detailed TODO List
+1. Complete UI/UX for all screens
+2. Implement image storage in filesystem
+3. Build product add/edit with category and link support
+4. Implement marketplace (anonymized product feed)
+5. Add product recommendation engine
+6. Integrate multi-currency and localization
+7. Test on multiple devices and countries
+8. Prepare Play Store assets (screenshots, description, privacy policy)
+9. Finalize and publish
+
+## 5. Documentation & Explanation
+- System design diagrams (component, data flow)
+- Explanation of AI recommendation logic
+- Security and privacy considerations
+- How to extend the app with more AI features
+
+---
+
+**This document serves as a roadmap for completing and enhancing the Beehive app for Play Store release.**

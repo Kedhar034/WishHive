@@ -1,0 +1,22 @@
+{
+  "appTitle": "Beehive",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "home": "Home",
+  "contacts": "Contacts",
+  "marketplace": "Market",
+  "settings": "Settings",
+  "createHive": "Create a Hive",
+  "createWish": "Make a Wish",
+  "friends": "Friends",
+  "requests": "Requests",
+  "searchFriends": "Search and add new friends",
+  "privacy": "Privacy",
+  "language": "Language",
+  "logout": "Log Out",
+  "shareApp": "Share Beehive",
+  "privacyPolicy": "Privacy Policy",
+  "version": "Version",
+  "profile": "Profile"
+}

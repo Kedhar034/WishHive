@@ -1,0 +1,19 @@
+{
+  "appTitle": "Beehive",
+  "home": "Accueil",
+  "contacts": "Contacts",
+  "marketplace": "Marché",
+  "settings": "Paramètres",
+  "createHive": "Créer une Ruche",
+  "createWish": "Faire un Vœu",
+  "friends": "Amis",
+  "requests": "Demandes",
+  "searchFriends": "Rechercher et ajouter de nouveaux amis",
+  "privacy": "Confidentialité",
+  "language": "Langue",
+  "logout": "Se déconnecter",
+  "shareApp": "Partager Beehive",
+  "privacyPolicy": "Politique de confidentialité",
+  "version": "Version",
+  "profile": "Profil"
+}

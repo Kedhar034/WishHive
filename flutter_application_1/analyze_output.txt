@@ -1,0 +1,23 @@
+﻿   info - 'androidProvider' is deprecated and shouldn't be used. Use providerAndroid instead. This parameter will be removed in a future major release - lib\main.dart:23:7 - deprecated_member_use
+   info - 'appleProvider' is deprecated and shouldn't be used. Use providerApple instead. This parameter will be removed in a future major release - lib\main.dart:24:7 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\pages\create_hive_sheet.dart:163:29 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\pages\create_hive_sheet.dart:164:29 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\pages\create_wish_sheet.dart:167:11 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\home_page.dart:112:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\home_page.dart:118:64 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\home_page.dart:218:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\login_page.dart:104:56 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\product_detail_page.dart:152:56 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\product_detail_page.dart:156:60 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\product_detail_page.dart:185:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\signup_page.dart:100:56 - deprecated_member_use
+  error - The class 'GoogleSignIn' doesn't have an unnamed constructor - lib\pages\welcome_page.dart:25:32 - new_with_undefined_constructor_default
+  error - The method 'signIn' isn't defined for the type 'GoogleSignIn' - lib\pages\welcome_page.dart:25:47 - undefined_method
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\welcome_page.dart:100:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\welcome_page.dart:188:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\welcome_page.dart:192:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\hive_card.dart:88:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\hive_card.dart:129:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\image_picker_widget.dart:29:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\image_picker_widget.dart:32:56 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\image_picker_widget.dart:122:50 - use_build_context_synchronously
