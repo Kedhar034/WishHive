@@ -518,22 +518,26 @@ class FirestoreService {
         final currentFulfilledBy = data['fulfilledBy'] as String? ?? '';
 
         if (currentFulfilledBy.isEmpty) {
-          // Claim it (Anyone allowed to see it can claim it)
+          // Claim it — set ownerSeen to false if a FRIEND is fulfilling (not the owner)
+          final isFriendFulfilling = fulfillerId != hiveOwnerId;
           transaction.update(docRef, {
             'fulfilledBy': fulfillerId,
             'fulfilledByName': fulfillerName,
+            'ownerSeen': !isFriendFulfilling, // false = needs notification
           });
         } else if (currentFulfilledBy == fulfillerId) {
           // Unclaim it (I claimed it, so I can unclaim it)
           transaction.update(docRef, {
             'fulfilledBy': '',
             'fulfilledByName': '',
+            'ownerSeen': true,
           });
         } else if (isOwnerOverride) {
            // I am the OWNER, and someone else claimed it. I can reset it.
            transaction.update(docRef, {
             'fulfilledBy': '',
             'fulfilledByName': '',
+            'ownerSeen': true,
           });
         } else {
           // Claimed by someone else, and I am not owner -> Error
@@ -544,6 +548,28 @@ class FirestoreService {
       debugPrint('Error toggling wish fulfillment: $e');
       rethrow;
     }
+  }
+
+  /// Mark a specific wish as seen by the owner (clears notification dot).
+  Future<void> markWishSeen(String wishId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      await _wishesCollection(uid).doc(wishId).update({'ownerSeen': true});
+    } catch (e) {
+      debugPrint('Error marking wish seen: $e');
+    }
+  }
+
+  /// Stream the count of unseen fulfilled wishes for the current user.
+  Stream<int> unseenFulfilledWishesCount() {
+    final uid = _uid;
+    if (uid == null) return Stream.value(0);
+
+    return _wishesCollection(uid)
+        .where('ownerSeen', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
   }
 
   // ─── Friend Feed ──────────────────────────────────────────────────
@@ -601,8 +627,19 @@ class FirestoreService {
                   var hive = HiveModel.fromFirestore(doc);
                   
                   // FIX: Override ownerDisplayName with friend's current name
+                  // Use displayName, fall back to fetching username if empty
+                  String friendName = friend.displayName;
+                  if (friendName.isEmpty) {
+                    try {
+                      final friendDoc = await _usersCollection.doc(fid).get();
+                      if (friendDoc.exists) {
+                        final friendUser = UserModel.fromFirestore(friendDoc);
+                        friendName = friendUser.username ?? friendUser.displayName;
+                      }
+                    } catch (_) { /* fallback to empty */ }
+                  }
                   hive = hive.copyWith(
-                    ownerDisplayName: friend.displayName,
+                    ownerDisplayName: friendName.isNotEmpty ? friendName : 'Friend',
                     ownerId: fid, 
                   );
 

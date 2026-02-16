@@ -64,6 +64,8 @@ dependencies:
   flutter_image_compress: ^2.4.0
   shared_preferences: ^2.5.4
   lottie: ^3.3.2
+  flutter_contacts: ^1.1.9+2
+  share_plus: ^10.1.4
   
 dev_dependencies:
   flutter_test:

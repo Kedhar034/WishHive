@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WishHive — Complete Dart/Flutter Guide & App Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; color: #1a1a2e; background: #fafafa; line-height: 1.7; }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.2rem; font-weight: 700; color: #F5A623; margin-bottom: 8px; border-bottom: 3px solid #F5A623; padding-bottom: 12px; }
+  h2 { font-size: 1.6rem; font-weight: 700; color: #2D2D2D; margin: 40px 0 16px; border-left: 4px solid #F5A623; padding-left: 12px; }
+  h3 { font-size: 1.2rem; font-weight: 600; color: #444; margin: 24px 0 12px; }
+  h4 { font-size: 1rem; font-weight: 600; color: #555; margin: 16px 0 8px; }
+  p, li { font-size: 0.95rem; margin-bottom: 8px; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  pre { background: #1e1e2e; color: #cdd6f4; border-radius: 10px; padding: 16px 20px; overflow-x: auto; margin: 12px 0 20px; font-family: 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.6; }
+  code { font-family: 'Fira Code', monospace; background: #f0f0f5; color: #d63384; padding: 2px 6px; border-radius: 4px; font-size: 0.88rem; }
+  pre code { background: none; color: inherit; padding: 0; }
+  .keyword { color: #cba6f7; }
+  .string { color: #a6e3a1; }
+  .comment { color: #6c7086; font-style: italic; }
+  .type { color: #89b4fa; }
+  .number { color: #fab387; }
+  .tag { background: #F5A623; color: #fff; padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; display: inline-block; margin-right: 6px; }
+  .tag-concept { background: #6366f1; }
+  .tag-firebase { background: #ff6f00; }
+  .tag-flutter { background: #027DFD; }
+  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px 24px; margin: 16px 0; }
+  .card-amber { border-left: 4px solid #F5A623; }
+  .card-blue { border-left: 4px solid #027DFD; }
+  .card-green { border-left: 4px solid #4CAF50; }
+  .card-purple { border-left: 4px solid #6366f1; }
+  .toc { background: #fff; border-radius: 12px; padding: 24px 32px; margin: 24px 0; border: 1px solid #e5e5e5; }
+  .toc a { text-decoration: none; color: #F5A623; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { counter-reset: section; list-style: none; }
+  .toc ol li { counter-increment: section; margin-bottom: 6px; }
+  .toc ol li::before { content: counter(section) ". "; font-weight: 700; color: #F5A623; }
+  .subtitle { color: #757575; font-size: 1.1rem; margin-bottom: 24px; }
+  .divider { border: none; border-top: 2px solid #f0f0f5; margin: 40px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { padding: 10px 14px; border: 1px solid #e5e5e5; text-align: left; font-size: 0.9rem; }
+  th { background: #F5A623; color: #fff; font-weight: 600; }
+  tr:nth-child(even) { background: #fafafa; }
+  @media print { body { background: #fff; } .container { max-width: 100%; } pre { font-size: 0.78rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🐝 WishHive — Complete Dart/Flutter Guide</h1>
+<p class="subtitle">Every Dart concept used in this app, explained with real code examples. Interview-ready reference.</p>
+
+<div class="toc">
+<strong>📋 Table of Contents</strong>
+<ol>
+  <li><a href="#dart-basics">Dart Language Fundamentals</a></li>
+  <li><a href="#oop">Object-Oriented Programming (OOP)</a></li>
+  <li><a href="#null-safety">Null Safety</a></li>
+  <li><a href="#collections">Collections &amp; Functional Operations</a></li>
+  <li><a href="#async">Async Programming (Future, Stream, async/await)</a></li>
+  <li><a href="#patterns">Design Patterns Used</a></li>
+  <li><a href="#flutter-widgets">Flutter Widget System</a></li>
+  <li><a href="#state">State Management (Riverpod)</a></li>
+  <li><a href="#firebase">Firebase Integration</a></li>
+  <li><a href="#architecture">App Architecture &amp; Project Structure</a></li>
+  <li><a href="#features">Complete Feature List</a></li>
+  <li><a href="#improvements">Future Improvements</a></li>
+</ol>
+</div>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="dart-basics">1. Dart Language Fundamentals</h2>
+
+<h3>1.1 Variables &amp; Data Types</h3>
+<p>Dart is strongly typed. We use <code>final</code> for values that never change after assignment, and <code>const</code> for compile-time constants.</p>
+
+<pre><code><span class="comment">// From app_theme.dart — compile-time constants</span>
+<span class="keyword">static const</span> <span class="type">Color</span> primaryAmber = <span class="type">Color</span>(<span class="number">0xFFF5A623</span>);
+<span class="keyword">static const</span> <span class="type">Color</span> backgroundLight = <span class="type">Color</span>(<span class="number">0xFFFFFDF7</span>);
+
+<span class="comment">// From upload_service.dart — variables</span>
+<span class="keyword">bool</span> _isUploading = <span class="keyword">false</span>;     <span class="comment">// Mutable variable</span>
+<span class="keyword">final</span> task = state.first;       <span class="comment">// Assigned once, never changed</span>
+<span class="keyword">var</span> fileToUpload = file;         <span class="comment">// Type inferred as File</span>
+</code></pre>
+
+<div class="card card-amber">
+<h4>🎯 Interview Tip</h4>
+<p><code>const</code> = compile-time constant (must be known before the app runs).<br>
+<code>final</code> = runtime constant (set once, can be computed at runtime).<br>
+<code>var</code> = type inferred, mutable (use when value changes).</p>
+</div>
+
+<h3>1.2 String Interpolation</h3>
+<p>Dart uses <code>$variable</code> or <code>${expression}</code> inside strings.</p>
+<pre><code><span class="comment">// From contacts_page.dart</span>
+<span class="keyword">final</span> inviteText = <span class="string">'Hey $name! 🐝 Join me on WishHive'</span>;
+
+<span class="comment">// From image_storage_service.dart</span>
+<span class="keyword">final</span> savedPath = <span class="string">'${imageDir.path}/$fileName'</span>;
+
+<span class="comment">// From upload_service.dart — complex expression</span>
+debugPrint(<span class="string">'[UploadService] Compressed: ${file.lengthSync()} -> ${fileToUpload.lengthSync()}'</span>);
+</code></pre>
+
+<h3>1.3 Enums</h3>
+<p>Enums define a fixed set of options. Used in <code>HiveModel</code> for privacy levels.</p>
+<pre><code><span class="comment">// From hive_model.dart</span>
+<span class="keyword">enum</span> <span class="type">HivePrivacy</span> { public, private, friends, specific }
+
+<span class="comment">// Usage — converting enum to/from String for Firestore</span>
+<span class="string">'privacy'</span>: privacy.name,  <span class="comment">// Enum → String: "public"</span>
+
+<span class="comment">// Parsing back from Firestore</span>
+<span class="keyword">static</span> <span class="type">HivePrivacy</span> _parsePrivacy(<span class="type">String</span>? value) {
+  <span class="keyword">switch</span> (value) {
+    <span class="keyword">case</span> <span class="string">'public'</span>: <span class="keyword">return</span> HivePrivacy.public;
+    <span class="keyword">case</span> <span class="string">'friends'</span>: <span class="keyword">return</span> HivePrivacy.friends;
+    <span class="keyword">default</span>: <span class="keyword">return</span> HivePrivacy.private;
+  }
+}
+</code></pre>
+
+<h3>1.4 Functions — Arrow Syntax &amp; Named Parameters</h3>
+<pre><code><span class="comment">// Arrow syntax — single expression functions</span>
+<span class="type">Set</span>&lt;<span class="type">String</span>&gt; build() => {};
+<span class="keyword">static bool</span> isAssetPath(<span class="type">String</span> path) => path.startsWith(<span class="string">'assets/'</span>);
+
+<span class="comment">// Named parameters with required keyword</span>
+<span class="keyword">const</span> <span class="type">HiveModel</span>({
+  <span class="keyword">required</span> <span class="keyword">this</span>.id,         <span class="comment">// Must be provided</span>
+  <span class="keyword">required</span> <span class="keyword">this</span>.title,
+  <span class="keyword">this</span>.imageUrl = <span class="string">''</span>,        <span class="comment">// Optional with default</span>
+  <span class="keyword">this</span>.privacy = <span class="type">HivePrivacy</span>.private,
+});
+
+<span class="comment">// Calling with named parameters</span>
+<span class="keyword">await</span> toggleWishFulfillment(
+  hiveOwnerId: uid,
+  wishId: wish.id,
+  fulfillerId: uid,
+  fulfillerName: <span class="string">'A Friend'</span>,
+);
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="oop">2. Object-Oriented Programming (OOP)</h2>
+
+<h3>2.1 Classes &amp; Constructors</h3>
+<pre><code><span class="comment">// From user_model.dart — Regular class with const constructor</span>
+<span class="keyword">class</span> <span class="type">UserModel</span> {
+  <span class="keyword">final</span> <span class="type">String</span> uid;
+  <span class="keyword">final</span> <span class="type">String</span> email;
+  <span class="keyword">final</span> <span class="type">String</span> displayName;
+  <span class="keyword">final</span> <span class="type">String</span>? username;              <span class="comment">// Nullable field</span>
+  <span class="keyword">final</span> <span class="type">List</span>&lt;<span class="type">FriendProfile</span>&gt; friends;   <span class="comment">// Generic list</span>
+
+  <span class="keyword">const</span> <span class="type">UserModel</span>({                     <span class="comment">// const constructor</span>
+    <span class="keyword">required this</span>.uid,
+    <span class="keyword">required this</span>.email,
+    <span class="keyword">this</span>.friends = <span class="keyword">const</span> [],             <span class="comment">// Default empty list</span>
+  });
+}
+</code></pre>
+
+<h3>2.2 Factory Constructors</h3>
+<p>Factory constructors can return existing instances or transform data. We use them everywhere to parse Firestore documents.</p>
+<pre><code><span class="comment">// From wish_model.dart — Factory that parses Firestore data</span>
+<span class="keyword">factory</span> <span class="type">WishModel</span>.fromFirestore(<span class="type">DocumentSnapshot</span> doc) {
+  <span class="keyword">final</span> data = doc.data() <span class="keyword">as</span> <span class="type">Map</span>&lt;<span class="type">String</span>, <span class="keyword">dynamic</span>&gt;? ?? {};
+  <span class="keyword">return</span> <span class="type">WishModel</span>(
+    id: doc.id,
+    name: data[<span class="string">'name'</span>] <span class="keyword">as</span> <span class="type">String</span>? ?? <span class="string">'No Name'</span>,
+    cost: (data[<span class="string">'cost'</span>] <span class="keyword">as</span> <span class="keyword">num</span>?)?.toDouble() ?? <span class="number">0.0</span>,
+    createdAt: (data[<span class="string">'createdAt'</span>] <span class="keyword">as</span> <span class="type">Timestamp</span>?)?.toDate(),
+    ownerSeen: data[<span class="string">'ownerSeen'</span>] <span class="keyword">as bool</span>? ?? <span class="keyword">true</span>,
+  );
+}
+</code></pre>
+
+<div class="card card-purple">
+<h4>🎯 Interview Tip — Why Factory Constructors?</h4>
+<p>Regular constructors ALWAYS create a new instance. Factory constructors can:<br>
+1. Parse/transform data before creating the object<br>
+2. Return a cached instance (singleton pattern)<br>
+3. Return a subtype<br>
+In our app, <code>fromFirestore</code> factory constructors handle type casting, null safety defaults, and data transformation.</p>
+</div>
+
+<h3>2.3 Inheritance &amp; Mixins</h3>
+<pre><code><span class="comment">// Extending a class — StatefulWidget pattern</span>
+<span class="keyword">class</span> <span class="type">ContactsPage</span> <span class="keyword">extends</span> <span class="type">ConsumerStatefulWidget</span> { ... }
+
+<span class="comment">// Mixin — adds animation capability without full inheritance</span>
+<span class="keyword">class</span> <span class="type">_ContactsPageState</span> <span class="keyword">extends</span> <span class="type">ConsumerState</span>&lt;<span class="type">ContactsPage</span>&gt;
+    <span class="keyword">with</span> <span class="type">SingleTickerProviderStateMixin</span> { ... }
+
+<span class="comment">// UploadService extends Notifier (Riverpod state management)</span>
+<span class="keyword">class</span> <span class="type">UploadService</span> <span class="keyword">extends</span> <span class="type">Notifier</span>&lt;<span class="type">List</span>&lt;<span class="type">UploadTask</span>&gt;&gt; { ... }
+</code></pre>
+
+<div class="card card-blue">
+<h4>🎯 extends vs with vs implements</h4>
+<table>
+<tr><th>Keyword</th><th>Purpose</th><th>Example in WishHive</th></tr>
+<tr><td><code>extends</code></td><td>Inherit ONE parent class (gets all methods)</td><td><code>ConsumerStatefulWidget</code></td></tr>
+<tr><td><code>with</code></td><td>Add behavior from mixins (multiple allowed)</td><td><code>SingleTickerProviderStateMixin</code></td></tr>
+<tr><td><code>implements</code></td><td>Promise to implement an interface</td><td>Not used in our app</td></tr>
+</table>
+</div>
+
+<h3>2.4 Static Methods</h3>
+<pre><code><span class="comment">// From image_storage_service.dart — Static = belongs to the CLASS, not instances</span>
+<span class="keyword">class</span> <span class="type">ImageStorageService</span> {
+  <span class="keyword">static</span> <span class="keyword">Future</span>&lt;<span class="type">String</span>&gt; saveImage(<span class="type">File</span> imageFile) <span class="keyword">async</span> { ... }
+  <span class="keyword">static bool</span> isLocalPath(<span class="type">String</span> path) { ... }
+  <span class="keyword">static bool</span> isNetworkPath(<span class="type">String</span> path) { ... }
+}
+
+<span class="comment">// Called without creating an instance:</span>
+ImageStorageService.isLocalPath(path);   <span class="comment">// Not: ImageStorageService().isLocalPath()</span>
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="null-safety">3. Null Safety</h2>
+
+<p>Dart's null safety prevents null reference errors at compile time. Every variable is non-null by default.</p>
+
+<h3>3.1 Nullable Types (<code>?</code>)</h3>
+<pre><code><span class="comment">// From user_model.dart</span>
+<span class="keyword">final</span> <span class="type">String</span>? username;     <span class="comment">// Can be null</span>
+<span class="keyword">final</span> <span class="type">String</span>? photoUrl;     <span class="comment">// Can be null</span>
+<span class="keyword">final</span> <span class="type">String</span> email;         <span class="comment">// CANNOT be null</span>
+
+<span class="comment">// From wish_model.dart</span>
+<span class="keyword">final</span> <span class="type">DateTime</span>? date;       <span class="comment">// Optional date</span>
+<span class="keyword">final</span> <span class="type">DateTime</span>? createdAt;  <span class="comment">// Optional timestamp</span>
+</code></pre>
+
+<h3>3.2 Null-Aware Operators</h3>
+<pre><code><span class="comment">// ?? — Null coalescing (provide default if null)</span>
+data[<span class="string">'name'</span>] <span class="keyword">as</span> <span class="type">String</span>? ?? <span class="string">'No Name'</span>
+user?.friendRequestsReceived.length ?? <span class="number">0</span>
+
+<span class="comment">// ?. — Null-safe member access</span>
+theme.textTheme.bodyLarge?.copyWith(color: Colors.grey)
+
+<span class="comment">// ?. with method calls</span>
+(data[<span class="string">'cost'</span>] <span class="keyword">as num</span>?)?.toDouble() ?? <span class="number">0.0</span>  <span class="comment">// Cast, then safe call</span>
+
+<span class="comment">// ! — Force unwrap (use ONLY when you're 100% sure it's not null)</span>
+<span class="keyword">final</span> uid = _uid;
+<span class="keyword">if</span> (uid == <span class="keyword">null</span>) <span class="keyword">throw</span> Exception(<span class="string">'Not authenticated'</span>);
+<span class="comment">// After the check, uid is guaranteed non-null</span>
+</code></pre>
+
+<h3>3.3 Type Casting (<code>as</code>)</h3>
+<pre><code><span class="comment">// From user_model.dart — Firestore returns dynamic types</span>
+<span class="keyword">final</span> data = doc.data() <span class="keyword">as</span> <span class="type">Map</span>&lt;<span class="type">String</span>, <span class="keyword">dynamic</span>&gt;? ?? {};
+
+<span class="comment">// Safe type casting chain:</span>
+(data[<span class="string">'quantity'</span>] <span class="keyword">as num</span>?)?.toInt() ?? <span class="number">1</span>
+<span class="comment">//  ↑ cast to num?   ↑ safe call  ↑ default</span>
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="collections">4. Collections &amp; Functional Operations</h2>
+
+<h3>4.1 Lists</h3>
+<pre><code><span class="comment">// From user_model.dart — Immutable default list</span>
+<span class="keyword">this</span>.friends = <span class="keyword">const</span> []
+
+<span class="comment">// Creating list from Firestore dynamic data</span>
+<span class="type">List</span>&lt;<span class="type">String</span>&gt;.from(data[<span class="string">'friendRequestsSent'</span>] ?? [])
+
+<span class="comment">// Spread operator (...) — merge lists</span>
+state = [...state, task];    <span class="comment">// Add item to immutable list</span>
+state = {...state, id};      <span class="comment">// Add item to immutable set</span>
+</code></pre>
+
+<h3>4.2 Map / Where / Any / toSet</h3>
+<pre><code><span class="comment">// .map() — Transform each element</span>
+friends.map((f) => f.toMap()).toList()
+
+<span class="comment">// .where() — Filter elements</span>
+state.where((t) => t != task).toList()
+
+<span class="comment">// .any() — Check if ANY element matches</span>
+me.friends.any((f) => f.uid == user.uid)
+
+<span class="comment">// .toSet() — Remove duplicates</span>
+<span class="keyword">final</span> friendEmails = me.friends.map((f) => f.email.toLowerCase()).toSet();
+
+<span class="comment">// .intersection() — Find common elements between two sets</span>
+contactEmails.intersection(friendEmails).isNotEmpty
+</code></pre>
+
+<h3>4.3 Maps (Dictionaries)</h3>
+<pre><code><span class="comment">// From hive_model.dart — Converting model to Firestore map</span>
+<span class="type">Map</span>&lt;<span class="type">String</span>, <span class="keyword">dynamic</span>&gt; toFirestore() {
+  <span class="keyword">return</span> {
+    <span class="string">'title'</span>: title,
+    <span class="string">'imageUrl'</span>: imageUrl,
+    <span class="string">'privacy'</span>: privacy.name,        <span class="comment">// Enum to String</span>
+    <span class="string">'itemCount'</span>: itemCount,
+    <span class="string">'createdAt'</span>: FieldValue.serverTimestamp(),
+  };
+}
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="async">5. Async Programming</h2>
+
+<h3>5.1 Future &amp; async/await</h3>
+<p>A <code>Future</code> represents a value that will be available later. <code>async/await</code> makes async code look synchronous.</p>
+<pre><code><span class="comment">// From image_storage_service.dart</span>
+<span class="keyword">static Future</span>&lt;<span class="type">String</span>&gt; saveImage(<span class="type">File</span> imageFile) <span class="keyword">async</span> {
+  <span class="keyword">final</span> appDir = <span class="keyword">await</span> getApplicationDocumentsDirectory();
+  <span class="comment">// ↑ Pauses here until the directory is fetched</span>
+  <span class="keyword">final</span> imageDir = <span class="type">Directory</span>(<span class="string">'${appDir.path}/beehive_images'</span>);
+
+  <span class="keyword">if</span> (!<span class="keyword">await</span> imageDir.exists()) {
+    <span class="keyword">await</span> imageDir.create(recursive: <span class="keyword">true</span>);
+  }
+
+  <span class="keyword">await</span> imageFile.copy(savedPath);
+  <span class="keyword">return</span> savedPath;  <span class="comment">// Returns Future&lt;String&gt;</span>
+}
+</code></pre>
+
+<h3>5.2 Streams — Real-Time Data</h3>
+<p>Streams emit multiple values over time. Perfect for Firestore real-time listeners.</p>
+<pre><code><span class="comment">// From firestore_service.dart — Firestore real-time stream</span>
+<span class="type">Stream</span>&lt;<span class="type">int</span>&gt; unseenFulfilledWishesCount() {
+  <span class="keyword">return</span> _wishesCollection(uid)
+      .where(<span class="string">'ownerSeen'</span>, isEqualTo: <span class="keyword">false</span>)
+      .snapshots()                        <span class="comment">// Returns Stream&lt;QuerySnapshot&gt;</span>
+      .map((snapshot) => snapshot.docs.length); <span class="comment">// Transform to Stream&lt;int&gt;</span>
+}
+
+<span class="comment">// From providers.dart — Riverpod watches streams</span>
+<span class="keyword">final</span> unseenFulfilledCountProvider = <span class="type">StreamProvider</span>&lt;<span class="type">int</span>&gt;((ref) {
+  <span class="keyword">return</span> ref.watch(firestoreServiceProvider).unseenFulfilledWishesCount();
+});
+</code></pre>
+
+<div class="card card-green">
+<h4>🎯 Future vs Stream</h4>
+<table>
+<tr><th>Future</th><th>Stream</th></tr>
+<tr><td>Returns ONE value</td><td>Emits MANY values over time</td></tr>
+<tr><td><code>await</code> to get value</td><td><code>listen()</code> or StreamProvider</td></tr>
+<tr><td>Fetching a user profile once</td><td>Real-time wishlist updates</td></tr>
+<tr><td><code>Future&lt;String&gt;</code></td><td><code>Stream&lt;int&gt;</code></td></tr>
+</table>
+</div>
+
+<h3>5.3 try/catch/finally &amp; rethrow</h3>
+<pre><code><span class="comment">// From upload_service.dart — Full error handling pattern</span>
+<span class="keyword">try</span> {
+  <span class="keyword">final</span> downloadUrl = <span class="keyword">await</span> ImageStorageService.uploadImage(file, userId);
+  <span class="keyword">await</span> FirebaseFirestore.instance.collection(<span class="string">'wishes'</span>).doc(wishId).update({...});
+} <span class="keyword">catch</span> (e) {
+  debugPrint(<span class="string">'Upload failed: $e'</span>);
+  <span class="keyword">if</span> (task.attempt < <span class="number">3</span>) {
+    <span class="comment">// Retry logic</span>
+  } <span class="keyword">else</span> {
+    _removeFromQueue(task);
+  }
+} <span class="keyword">finally</span> {
+  _isUploading = <span class="keyword">false</span>;     <span class="comment">// Always runs, even after errors</span>
+  _processQueue();           <span class="comment">// Continue with next item</span>
+}
+
+<span class="comment">// rethrow — pass the error to the caller</span>
+<span class="keyword">catch</span> (e) {
+  debugPrint(<span class="string">'Error: $e'</span>);
+  <span class="keyword">rethrow</span>;  <span class="comment">// Let the UI handle it</span>
+}
+</code></pre>
+
+<h3>5.4 Firestore Transactions</h3>
+<pre><code><span class="comment">// From firestore_service.dart — Atomic read-then-write</span>
+<span class="keyword">await</span> _firestore.runTransaction((transaction) <span class="keyword">async</span> {
+  <span class="keyword">final</span> snapshot = <span class="keyword">await</span> transaction.get(docRef);
+  <span class="keyword">final</span> data = snapshot.data() <span class="keyword">as</span> <span class="type">Map</span>&lt;<span class="type">String</span>, <span class="keyword">dynamic</span>&gt;;
+  <span class="keyword">final</span> currentFulfilledBy = data[<span class="string">'fulfilledBy'</span>] ?? <span class="string">''</span>;
+
+  <span class="keyword">if</span> (currentFulfilledBy.isEmpty) {
+    transaction.update(docRef, {
+      <span class="string">'fulfilledBy'</span>: fulfillerId,
+      <span class="string">'ownerSeen'</span>: <span class="keyword">false</span>,
+    });
+  }
+});
+<span class="comment">// ↑ Guarantees no race conditions — if two friends click "fulfill" at the same time,
+//   only one succeeds. The transaction retries automatically on conflict.</span>
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="patterns">6. Design Patterns Used</h2>
+
+<h3>6.1 copyWith Pattern (Immutability)</h3>
+<p>All our models are immutable (<code>final</code> fields). To "change" a value, we create a NEW object with the changed field.</p>
+<pre><code><span class="comment">// From user_model.dart</span>
+<span class="type">UserModel</span> copyWith({
+  <span class="type">String</span>? displayName,
+  <span class="type">List</span>&lt;<span class="type">FriendProfile</span>&gt;? friends,
+}) {
+  <span class="keyword">return</span> <span class="type">UserModel</span>(
+    uid: uid,                                   <span class="comment">// Keep original</span>
+    displayName: displayName ?? <span class="keyword">this</span>.displayName, <span class="comment">// Use new OR keep original</span>
+    friends: friends ?? <span class="keyword">this</span>.friends,
+  );
+}
+
+<span class="comment">// Usage:</span>
+<span class="keyword">final</span> updatedUser = user.copyWith(displayName: <span class="string">'New Name'</span>);
+<span class="comment">// Original user is UNCHANGED, updatedUser has the new name</span>
+</code></pre>
+
+<h3>6.2 Repository Pattern</h3>
+<p><code>FirestoreService</code> centralizes ALL database operations. Pages never touch Firestore directly.</p>
+<pre><code><span class="comment">// Service layer (firestore_service.dart)</span>
+<span class="keyword">class</span> <span class="type">FirestoreService</span> {
+  <span class="keyword">Future</span>&lt;<span class="keyword">void</span>&gt; createHive(<span class="type">HiveModel</span> hive) { ... }
+  <span class="keyword">Future</span>&lt;<span class="keyword">void</span>&gt; updateWish(<span class="type">WishModel</span> wish) { ... }
+  <span class="keyword">Stream</span>&lt;<span class="type">int</span>&gt; unseenFulfilledWishesCount() { ... }
+}
+
+<span class="comment">// UI layer — calls service through Riverpod provider</span>
+<span class="keyword">await</span> ref.read(firestoreServiceProvider).createHive(hive);
+</code></pre>
+
+<h3>6.3 Queue Pattern (Upload Service)</h3>
+<pre><code><span class="comment">// upload_service.dart — Background upload queue with retry logic</span>
+<span class="keyword">class</span> <span class="type">UploadService</span> <span class="keyword">extends</span> <span class="type">Notifier</span>&lt;<span class="type">List</span>&lt;<span class="type">UploadTask</span>&gt;&gt; {
+  <span class="keyword">void</span> addToQueue(wishId, imageFile, userId) {
+    state = [...state, task];  <span class="comment">// Add to queue</span>
+    _processQueue();           <span class="comment">// Start processing</span>
+  }
+
+  <span class="keyword">Future</span>&lt;<span class="keyword">void</span>&gt; _processQueue() <span class="keyword">async</span> {
+    <span class="keyword">if</span> (_isUploading || state.isEmpty) <span class="keyword">return</span>;
+    <span class="comment">// Upload → Update Firestore → Remove from queue → Process next</span>
+    <span class="comment">// Retries up to 3 times on failure</span>
+  }
+}
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="flutter-widgets">7. Flutter Widget System</h2>
+
+<h3>7.1 StatelessWidget vs StatefulWidget</h3>
+<pre><code><span class="comment">// StatelessWidget — No internal state, just builds UI</span>
+<span class="keyword">class</span> <span class="type">BeehiveApp</span> <span class="keyword">extends</span> <span class="type">ConsumerWidget</span> {  <span class="comment">// Riverpod version</span>
+  <span class="type">Widget</span> build(<span class="type">BuildContext</span> context, <span class="type">WidgetRef</span> ref) { ... }
+}
+
+<span class="comment">// StatefulWidget — Has mutable internal state (e.g. tab index, text controllers)</span>
+<span class="keyword">class</span> <span class="type">ContactsPage</span> <span class="keyword">extends</span> <span class="type">ConsumerStatefulWidget</span> { ... }
+<span class="keyword">class</span> <span class="type">_ContactsPageState</span> <span class="keyword">extends</span> <span class="type">ConsumerState</span>&lt;<span class="type">ContactsPage</span>&gt; {
+  <span class="keyword">late</span> <span class="type">TabController</span> _tabController;  <span class="comment">// late = initialized later (in initState)</span>
+  
+  <span class="keyword">void</span> initState() {
+    <span class="keyword">super</span>.initState();
+    _tabController = <span class="type">TabController</span>(length: <span class="number">2</span>, vsync: <span class="keyword">this</span>);
+  }
+  
+  <span class="keyword">void</span> dispose() {
+    _tabController.dispose();  <span class="comment">// Clean up resources</span>
+    <span class="keyword">super</span>.dispose();
+  }
+}
+</code></pre>
+
+<h3>7.2 Widget Lifecycle</h3>
+<table>
+<tr><th>Method</th><th>When Called</th><th>WishHive Usage</th></tr>
+<tr><td><code>initState()</code></td><td>Widget created</td><td>Start animations, load contacts</td></tr>
+<tr><td><code>didUpdateWidget()</code></td><td>Parent rebuilds with new data</td><td>Reset animation on wish toggle</td></tr>
+<tr><td><code>build()</code></td><td>Every time setState() is called</td><td>Render the UI</td></tr>
+<tr><td><code>dispose()</code></td><td>Widget removed from tree</td><td>Clean up controllers, timers</td></tr>
+</table>
+
+<h3>7.3 Key Flutter Widgets Used</h3>
+<table>
+<tr><th>Widget</th><th>Purpose</th><th>Where Used</th></tr>
+<tr><td><code>Scaffold</code></td><td>Page structure (body + appbar + FAB + nav)</td><td>Every page</td></tr>
+<tr><td><code>IndexedStack</code></td><td>Show one child at a time, keep state</td><td>home_page.dart (tab switching)</td></tr>
+<tr><td><code>CurvedNavigationBar</code></td><td>Animated bottom nav bar</td><td>home_page.dart</td></tr>
+<tr><td><code>CustomScrollView + Slivers</code></td><td>Advanced scrolling layouts</td><td>contacts_page.dart, home_page.dart</td></tr>
+<tr><td><code>Hero</code></td><td>Shared element animation</td><td>HiveCard → ProductDetailPage</td></tr>
+<tr><td><code>AnimatedContainer</code></td><td>Smooth property transitions</td><td>Wish checkbox animation</td></tr>
+<tr><td><code>FadeTransition</code></td><td>Opacity animation</td><td>Page entry animations</td></tr>
+<tr><td><code>Badge</code></td><td>Notification count indicator</td><td>Nav bar (friends, wishes)</td></tr>
+<tr><td><code>SpeedDial</code></td><td>Expandable FAB menu</td><td>Create Hive / Create Wish</td></tr>
+<tr><td><code>TabBar + TabBarView</code></td><td>Tabbed interface</td><td>contacts_page.dart</td></tr>
+</table>
+
+<h3>7.4 Conditional Widget Rendering</h3>
+<pre><code><span class="comment">// if-condition inside widget tree (collection if)</span>
+<span class="type">Row</span>(
+  children: [
+    <span class="keyword">if</span> (isCompleted && !widget.wish.ownerSeen && widget.isOwner)
+      <span class="type">Container</span>(
+        width: <span class="number">8</span>, height: <span class="number">8</span>,
+        decoration: <span class="keyword">const</span> <span class="type">BoxDecoration</span>(color: Colors.red, shape: BoxShape.circle),
+      ),
+    <span class="type">Expanded</span>(child: <span class="type">Text</span>(widget.wish.name)),
+  ],
+),
+
+<span class="comment">// Ternary in widgets</span>
+isCompleted
+    ? <span class="keyword">const</span> <span class="type">Icon</span>(Icons.check, color: Colors.white)
+    : <span class="keyword">null</span>,
+
+<span class="comment">// Spread with if (collection for + if)</span>
+<span class="keyword">if</span> (friends.isNotEmpty) ...[
+  <span class="type">SliverToBoxAdapter</span>(child: <span class="type">Text</span>(<span class="string">'Your Friends'</span>)),
+  <span class="type">SliverList</span>(...),
+],
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="state">8. State Management (Riverpod)</h2>
+
+<h3>8.1 Provider Types Used</h3>
+<pre><code><span class="comment">// Provider — Simple value, no state changes</span>
+<span class="keyword">final</span> firestoreServiceProvider = <span class="type">Provider</span>&lt;<span class="type">FirestoreService</span>&gt;((ref) {
+  <span class="keyword">return</span> <span class="type">FirestoreService</span>();
+});
+
+<span class="comment">// StreamProvider — Wraps a Stream, auto-handles loading/error/data</span>
+<span class="keyword">final</span> currentUserStreamProvider = <span class="type">StreamProvider</span>&lt;<span class="type">UserModel</span>?&gt;((ref) {
+  <span class="keyword">final</span> uid = ref.watch(uidProvider);
+  <span class="keyword">return</span> ref.watch(firestoreServiceProvider).userStream(uid!);
+});
+
+<span class="comment">// FutureProvider — Wraps a Future</span>
+<span class="keyword">final</span> friendFeedProvider = <span class="type">FutureProvider</span>.autoDispose&lt;<span class="type">List</span>&lt;<span class="type">HiveModel</span>&gt;&gt;((ref) <span class="keyword">async</span> {
+  <span class="keyword">return</span> ref.read(firestoreServiceProvider).getFriendsFeed(user.friends);
+});
+
+<span class="comment">// NotifierProvider — Complex state with methods</span>
+<span class="keyword">final</span> uploadServiceProvider = <span class="type">NotifierProvider</span>&lt;<span class="type">UploadService</span>, <span class="type">List</span>&lt;<span class="type">UploadTask</span>&gt;&gt;(...);
+</code></pre>
+
+<h3>8.2 ref.watch vs ref.read</h3>
+<pre><code><span class="comment">// ref.watch — Rebuilds widget when value changes (use in build())</span>
+<span class="keyword">final</span> user = ref.watch(currentUserStreamProvider).value;
+<span class="keyword">final</span> unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? <span class="number">0</span>;
+
+<span class="comment">// ref.read — One-time read (use in callbacks, NOT in build())</span>
+<span class="keyword">await</span> ref.read(firestoreServiceProvider).sendFriendRequest(uid);
+</code></pre>
+
+<h3>8.3 AsyncValue Pattern (when)</h3>
+<pre><code><span class="comment">// Riverpod's AsyncValue handles Loading, Error, and Data states automatically</span>
+myUserAsync.when(
+  data: (myUser) {
+    <span class="keyword">if</span> (myUser == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="type">Text</span>(<span class="string">'User not found'</span>);
+    <span class="keyword">return</span> _buildFriendsTab(myUser);
+  },
+  loading: () => <span class="keyword">const</span> <span class="type">CircularProgressIndicator</span>(),
+  error: (e, _) => <span class="type">Text</span>(<span class="string">'Error: $e'</span>),
+);
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="firebase">9. Firebase Integration</h2>
+
+<h3>9.1 Firebase Services Used</h3>
+<table>
+<tr><th>Service</th><th>Purpose</th></tr>
+<tr><td><strong>Firebase Auth</strong></td><td>Login (Email, Google Sign-In)</td></tr>
+<tr><td><strong>Cloud Firestore</strong></td><td>Database (users, hives, wishes)</td></tr>
+<tr><td><strong>Firebase Storage</strong></td><td>Image uploads</td></tr>
+<tr><td><strong>Firebase App Check</strong></td><td>API security</td></tr>
+</table>
+
+<h3>9.2 Firestore Data Model</h3>
+<pre><code><span class="comment">// Document Structure:</span>
+users/
+  {uid}/
+    ├── email, displayName, username, photoUrl
+    ├── friends: [ {uid, displayName, photoUrl, email} ]
+    ├── friendRequestsSent: [ uid1, uid2 ]
+    ├── friendRequestsReceived: [ uid3 ]
+    ├── mutedFriends: [ uid4 ]
+    ├── hiddenHiveIds: [ hiveId1 ]
+    └── hives/                     <span class="comment">← Subcollection</span>
+        {hiveId}/
+          ├── title, imageUrl, note, privacy
+          ├── itemCount, totalCost
+          └── wishes/              <span class="comment">← Subcollection</span>
+              {wishId}/
+                ├── name, imageUrl, cost, link
+                ├── fulfilledBy, fulfilledByName
+                └── ownerSeen
+</code></pre>
+
+<h3>9.3 Offline Persistence</h3>
+<pre><code><span class="comment">// From main.dart — Works offline automatically</span>
+FirebaseFirestore.instance.settings = <span class="keyword">const</span> <span class="type">Settings</span>(
+  persistenceEnabled: <span class="keyword">true</span>,
+  cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+);
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="architecture">10. App Architecture</h2>
+
+<h3>10.1 Project Structure</h3>
+<pre><code>lib/
+├── main.dart                    <span class="comment"># App entry point</span>
+├── firebase_options.dart        <span class="comment"># Auto-generated Firebase config</span>
+├── core/
+│   ├── theme/app_theme.dart     <span class="comment"># Colors, fonts, widget themes</span>
+│   ├── constants/app_constants.dart
+│   └── utils/
+├── models/                      <span class="comment"># Data classes</span>
+│   ├── user_model.dart          <span class="comment"># UserModel, FriendProfile</span>
+│   ├── hive_model.dart          <span class="comment"># HiveModel (category/collection)</span>
+│   └── wish_model.dart          <span class="comment"># WishModel (individual item)</span>
+├── services/                    <span class="comment"># Business logic layer</span>
+│   ├── firestore_service.dart   <span class="comment"># All CRUD operations (700+ lines)</span>
+│   ├── image_storage_service.dart
+│   ├── upload_service.dart      <span class="comment"># Background upload queue</span>
+│   ├── metadata_service.dart    <span class="comment"># URL metadata fetching</span>
+│   └── affiliate_service.dart
+├── providers/                   <span class="comment"># Riverpod state providers</span>
+│   ├── providers.dart
+│   └── locale_provider.dart
+├── pages/                       <span class="comment"># UI screens (15 pages)</span>
+│   ├── home_page.dart           <span class="comment"># Main dashboard + nav</span>
+│   ├── product_detail_page.dart <span class="comment"># Hive detail with wishes</span>
+│   ├── contacts_page.dart       <span class="comment"># Friends + phone contacts</span>
+│   ├── friend_feed_page.dart    <span class="comment"># Friends' hives</span>
+│   ├── create_hive_sheet.dart   <span class="comment"># Bottom sheet for creating hive</span>
+│   ├── create_wish_sheet.dart   <span class="comment"># Bottom sheet for creating wish</span>
+│   └── ...
+├── widgets/                     <span class="comment"># Reusable components</span>
+│   ├── hive_card.dart
+│   ├── shimmer_loading.dart
+│   └── ...
+└── l10n/                        <span class="comment"># Localization (EN, FR, HI, TE)</span>
+</code></pre>
+
+<h3>10.2 Data Flow</h3>
+<pre><code><span class="comment">// REQUEST FLOW:</span>
+UI (Page) → ref.read(provider) → Service → Firestore
+
+<span class="comment">// REALTIME DATA FLOW:</span>
+Firestore → Stream → StreamProvider → ref.watch() → UI auto-rebuilds
+</code></pre>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="features">11. Complete Feature List</h2>
+
+<table>
+<tr><th>#</th><th>Feature</th><th>Description</th></tr>
+<tr><td>1</td><td>🔐 Authentication</td><td>Email/password + Google Sign-In, profile completion</td></tr>
+<tr><td>2</td><td>🐝 Hives (Categories)</td><td>Create, edit, delete wishlists with images and privacy settings</td></tr>
+<tr><td>3</td><td>⭐ Wishes (Items)</td><td>Add wishes with name, image, price, link, quantity, notes</td></tr>
+<tr><td>4</td><td>👥 Friends System</td><td>Send/accept/reject friend requests, mute friends</td></tr>
+<tr><td>5</td><td>📱 Phone Contacts</td><td>View contacts, invite to app via SMS/WhatsApp</td></tr>
+<tr><td>6</td><td>🎁 Wish Fulfillment</td><td>Friends can mark wishes as "I'll get this for you"</td></tr>
+<tr><td>7</td><td>🔴 Notification Dots</td><td>Badge on nav icon + dot on wish when friend fulfills</td></tr>
+<tr><td>8</td><td>📤 Share Intent</td><td>Receive shared links from Amazon/Blinkit/etc → auto-create wish</td></tr>
+<tr><td>9</td><td>🖼️ Image Management</td><td>Local storage, Firebase upload, compression, full-screen view</td></tr>
+<tr><td>10</td><td>🔒 Privacy Controls</td><td>Public/Private/Friends/Specific viewer access</td></tr>
+<tr><td>11</td><td>👁️ Hidden Hives</td><td>Hide specific hives from feed</td></tr>
+<tr><td>12</td><td>🌐 Multi-Language</td><td>English, French, Hindi, Telugu</td></tr>
+<tr><td>13</td><td>✨ Animations</td><td>Hero transitions, shimmer loading, fade transitions</td></tr>
+<tr><td>14</td><td>📶 Offline Support</td><td>Firestore persistence, background upload queue</td></tr>
+<tr><td>15</td><td>🛍️ Marketplace</td><td>Product recommendations (planned)</td></tr>
+</table>
+
+<hr class="divider">
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<h2 id="improvements">12. Future Improvements</h2>
+
+<div class="card card-amber">
+<h3>🎓 Onboarding Tutorial</h3>
+<p>Step-by-step coach marks guiding new users through creating their first hive and wish. Uses <code>tutorial_coach_mark</code> package with a <code>hasCompletedTutorial</code> field in Firestore.</p>
+</div>
+
+<div class="card card-blue">
+<h3>🔔 Push Notifications (FCM)</h3>
+<p>Real push notifications for wish fulfillments, friend requests, and friend activity. Uses Firebase Cloud Messaging with Cloud Functions as triggers.</p>
+</div>
+
+<div class="card card-green">
+<h3>🤖 AI-Powered Features</h3>
+<ul>
+<li><strong>Smart Price Tracking</strong> — Track prices across e-commerce sites and notify on drops</li>
+<li><strong>Auto-Categorization</strong> — AI suggests which hive a new wish belongs to</li>
+<li><strong>Gift Recommendations</strong> — Suggest gifts based on friend's wishlist patterns</li>
+</ul>
+</div>
+
+<div class="card card-purple">
+<h3>📊 Analytics Dashboard</h3>
+<p>Show users stats like: wishes fulfilled, total savings, most active friends, spending patterns per category.</p>
+</div>
+
+<div class="card card-amber">
+<h3>🔗 Deep Linking</h3>
+<p>Share a hive link → recipient opens the app directly to that hive. Uses Firebase Dynamic Links or App Links.</p>
+</div>
+
+<div class="card card-blue">
+<h3>🎨 Theme Customization</h3>
+<p>Dark mode, custom accent colors, and seasonal themes (Diwali, Christmas).</p>
+</div>
+
+<div class="card card-green">
+<h3>🧪 Testing</h3>
+<ul>
+<li>Unit tests for all services (FirestoreService, UploadService)</li>
+<li>Widget tests for complex widgets (WishTile, HiveCard)</li>
+<li>Integration tests for auth flow and CRUD</li>
+</ul>
+</div>
+
+<div class="card card-purple">
+<h3>⚡ Performance</h3>
+<ul>
+<li>Pagination for large wishlists (currently loads all at once)</li>
+<li>Image caching with aggressive TTL</li>
+<li>Lazy loading for friend feed</li>
+</ul>
+</div>
+
+<hr class="divider">
+
+<div style="text-align: center; padding: 32px 0; color: #999;">
+  <p><strong>WishHive</strong> — Built with Flutter & Firebase</p>
+  <p>Generated on February 16, 2026 | For interview preparation & learning reference</p>
+  <p style="font-size: 2rem;">🐝</p>
+</div>
+
+</div>
+</body>
+</html>

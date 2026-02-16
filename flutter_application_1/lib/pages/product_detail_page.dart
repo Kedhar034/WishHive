@@ -37,38 +37,13 @@ class ProductDetailPage extends ConsumerStatefulWidget {
   ConsumerState<ProductDetailPage> createState() => _ProductDetailPageState();
 }
 
-class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _animController;
-  late final Animation<double> _fadeAnim;
-
+class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   bool get _isOwner {
     final uid = ref.read(uidProvider);
     return widget.ownerId.isEmpty || widget.ownerId == uid;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
-    // Start content fade-in after Hero settles
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _animController.forward();
-    });
-  }
 
-  @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
@@ -117,10 +92,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: image,
-    );
+    return image;
   }
 
   Widget _placeholderImage() {
@@ -136,7 +108,6 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
             AppTheme.primaryAmber.withValues(alpha: 0.3),
           ],
         ),
-        borderRadius: BorderRadius.circular(16),
       ),
       child: const Icon(Icons.hive, size: 64, color: AppTheme.primaryAmber),
     );
@@ -227,32 +198,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
                     ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                    child: Hero(
-                      tag: widget.heroTag ?? 'hive-${widget.hiveId}',
-                      flightShuttleBuilder: (
-                        BuildContext flightContext,
-                        Animation<double> animation,
-                        HeroFlightDirection flightDirection,
-                        BuildContext fromHeroContext,
-                        BuildContext toHeroContext,
-                      ) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            image: DecorationImage(
-                              image: CachedNetworkImageProvider(
-                                widget.imageUrl.isNotEmpty ? widget.imageUrl : AppConstants.fallbackImage,
-                                // Use a reasonable cache size for the header (e.g. 500px height)
-                                // This ensures we don't load 4K images for a phone header
-                                maxHeight: 500, 
-                              ),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        );
-                      },
+                  background: Hero(
+                    tag: widget.heroTag ?? 'hive-${widget.hiveId}',
+                    child: Material(
+                      type: MaterialType.transparency,
                       child: _buildHeaderImage(),
                     ),
                   ),
@@ -261,76 +210,70 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
               ),
 
               SliverToBoxAdapter(
-                child: FadeTransition(
-                  opacity: _fadeAnim,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text('Wishes', style: theme.textTheme.titleLarge),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${wishes.length}',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text('Wishes', style: theme.textTheme.titleLarge),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ],
-                        ),
-                        if (!_isOwner && widget.ownerDisplayName.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
                             child: Text(
-                              'Owned by ${widget.ownerDisplayName}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[600],
-                                fontStyle: FontStyle.italic,
+                              '${wishes.length}',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: theme.colorScheme.primary,
                               ),
                             ),
                           ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      if (!_isOwner && widget.ownerDisplayName.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            'Owned by ${widget.ownerDisplayName}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
 
               if (wishes.isEmpty)
                 SliverFillRemaining(
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.star_outline,
-                              size: 64,
-                              color: theme.colorScheme.primary.withValues(alpha: 0.25)),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No wishes yet',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.star_outline,
+                            size: 64,
+                            color: theme.colorScheme.primary.withValues(alpha: 0.25)),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No wishes yet',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
-                          if (_isOwner) ...[
-                             const SizedBox(height: 6),
-                             Text(
-                               'Add a wish to this hive!',
-                               style: theme.textTheme.bodyMedium,
-                             ),
-                          ],
+                        ),
+                        if (_isOwner) ...[
+                           const SizedBox(height: 6),
+                           Text(
+                             'Add a wish to this hive!',
+                             style: theme.textTheme.bodyMedium,
+                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 )
@@ -344,20 +287,17 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
                       final wish = wishes[index];
                       final isCompleted = wish.fulfilledBy.isNotEmpty;
                       
-                      return FadeTransition(
-                        opacity: _fadeAnim,
-                        child: _WishTile(
-                          wish: wish,
-                          isCompleted: isCompleted,
-                          isOwner: _isOwner,
-                          onToggle: () => _handleWishToggle(wish),
-                          onLinkTap: wish.link.isNotEmpty
-                              ? () => _launchUrl(wish.link)
-                              : null,
-                          onEdit: _isOwner ? () => _editWish(wish) : null,
-                          onDelete: _isOwner ? () => _confirmDeleteWish(wish) : null,
-                          buildImage: _buildWishImage,
-                        ),
+                      return _WishTile(
+                        wish: wish,
+                        isCompleted: isCompleted,
+                        isOwner: _isOwner,
+                        onToggle: () => _handleWishToggle(wish),
+                        onLinkTap: wish.link.isNotEmpty
+                            ? () => _launchUrl(wish.link)
+                            : null,
+                        onEdit: _isOwner ? () => _editWish(wish) : null,
+                        onDelete: _isOwner ? () => _confirmDeleteWish(wish) : null,
+                        buildImage: _buildWishImage,
                       );
                     },
                   ),
@@ -380,6 +320,11 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage>
     final user = ref.read(userProvider).value; 
     
     if (uid == null || user == null) return;
+
+    // If owner is viewing an unseen fulfilled wish, mark it as seen
+    if (_isOwner && wish.fulfilledBy.isNotEmpty && !wish.ownerSeen) {
+      ref.read(firestoreServiceProvider).markWishSeen(wish.id);
+    }
 
     // Allow owner to toggle fulfillment too (Mark as Completed)
     // Logic: 
@@ -654,16 +599,33 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.wish.name,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          decoration: isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                          color: isCompleted
-                              ? Colors.grey
-                              : theme.textTheme.bodyLarge?.color,
-                        ),
+                      Row(
+                        children: [
+                          // Notification dot for unseen fulfillment
+                          if (isCompleted && !widget.wish.ownerSeen && widget.isOwner)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              widget.wish.name,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                decoration: isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: isCompleted
+                                    ? Colors.grey
+                                    : theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       if (isCompleted)
                         Padding(

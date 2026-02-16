@@ -1,11 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/providers.dart';
 import '../models/hive_model.dart';
 import '../models/user_model.dart';
-import '../widgets/hive_card.dart';
-import '../core/constants/app_constants.dart';
+import '../services/image_storage_service.dart';
 
 class HiddenHivesPage extends ConsumerStatefulWidget {
   const HiddenHivesPage({super.key});
@@ -45,6 +45,38 @@ class _HiddenHivesPageState extends ConsumerState<HiddenHivesPage> {
            SnackBar(content: Text('Failed to unhide: $e')),
          );
       }
+    }
+  }
+
+  Widget _buildHiveImage(String imageUrl) {
+    if (ImageStorageService.isLocalPath(imageUrl)) {
+      return Image.file(
+        File(imageUrl),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.image_not_supported, color: Colors.grey),
+        ),
+      );
+    } else if (ImageStorageService.isNetworkPath(imageUrl)) {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(color: Colors.grey[200]),
+        errorWidget: (_, __, ___) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.image_not_supported, color: Colors.grey),
+        ),
+      );
+    } else {
+      return Image.asset(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.grey[200],
+          child: const Icon(Icons.image_not_supported, color: Colors.grey),
+        ),
+      );
     }
   }
 
@@ -137,12 +169,7 @@ class _HiddenHivesPageState extends ConsumerState<HiddenHivesPage> {
                           SizedBox(
                             height: 120,
                             width: double.infinity,
-                            child: CachedNetworkImage(
-                              imageUrl: hive.imageUrl,
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => Container(color: Colors.grey[200]),
-                              errorWidget: (_, __, ___) => const Icon(Icons.error),
-                            ),
+                            child: _buildHiveImage(hive.imageUrl),
                           ),
                       ],
                     ),

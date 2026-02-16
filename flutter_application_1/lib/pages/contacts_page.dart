@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/user_model.dart';
 import '../providers/providers.dart';
 import '../widgets/avatar_image.dart';
@@ -19,10 +21,16 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   List<UserModel> _searchResults = [];
   bool _isSearching = false;
 
+  // Phone contacts
+  List<Contact> _phoneContacts = [];
+  bool _contactsLoaded = false;
+  bool _contactsPermissionDenied = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadPhoneContacts();
   }
 
   Timer? _debounce;
@@ -33,6 +41,52 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
     _searchController.dispose();
     _debounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadPhoneContacts() async {
+    // Step 1: Check permission separately
+    bool hasPermission = false;
+    try {
+      hasPermission = await FlutterContacts.requestPermission();
+    } catch (e) {
+      debugPrint('Error requesting contacts permission: $e');
+    }
+
+    if (!hasPermission) {
+      if (mounted) setState(() => _contactsPermissionDenied = true);
+      return;
+    }
+
+    // Step 2: Permission granted — now load contacts
+    try {
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      contacts.sort((a, b) => a.displayName.compareTo(b.displayName));
+      if (mounted) {
+        setState(() {
+          _phoneContacts = contacts;
+          _contactsLoaded = true;
+          _contactsPermissionDenied = false; // Reset in case it was set before
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading contacts (permission OK): $e');
+      // Permission was granted but loading failed — don't show "denied" UI
+      if (mounted) {
+        setState(() {
+          _phoneContacts = [];
+          _contactsLoaded = true; // Show empty list, not "denied" UI
+          _contactsPermissionDenied = false;
+        });
+      }
+    }
+  }
+
+  void _inviteContact(Contact contact) {
+    final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
+    final name = contact.displayName;
+    final inviteText = 'Hey $name! 🐝 Join me on WishHive — the app to organize & share your wishlists with friends. Download it here: https://play.google.com/store/apps/details?id=com.wishhive.app';
+    
+    Share.share(inviteText);
   }
 
   void _onSearchChanged(String query) {
@@ -65,27 +119,39 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   void _sendRequest(String targetUid) async {
     try {
       await ref.read(firestoreServiceProvider).sendFriendRequest(targetUid);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request Sent!')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request Sent!')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
   void _acceptRequest(String requesterUid) async {
     try {
       await ref.read(firestoreServiceProvider).acceptFriendRequest(requesterUid);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Friend Accepted!')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Friend Accepted!')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
   void _rejectRequest(String requesterUid) async {
     try {
       await ref.read(firestoreServiceProvider).rejectFriendRequest(requesterUid);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request Rejected')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request Rejected')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -95,7 +161,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Find your friends!!'),
+        title: const Text('Friends'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -111,7 +177,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
           return TabBarView(
             controller: _tabController,
             children: [
-              // 1. Friends Tab (Contains Search + Friends List)
+              // 1. Friends Tab (Contains Search + Friends List + Phone Contacts)
               _buildFriendsTab(myUser),
               
               // 2. Requests List
@@ -126,6 +192,8 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   }
 
   Widget _buildFriendsTab(UserModel me) {
+    final searchQuery = _searchController.text.toLowerCase();
+
     return Column(
       children: [
         Padding(
@@ -133,9 +201,19 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Search and add new friends',
-              hintText: 'Search by username or email',
+              labelText: 'Search friends or contacts',
+              hintText: 'Search by name, username, or email',
               prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearchChanged('');
+                        setState(() {});
+                      },
+                    )
+                  : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -144,13 +222,206 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
               filled: true,
               fillColor: Colors.grey[200],
             ),
-            onChanged: _onSearchChanged,
+            onChanged: (val) {
+              _onSearchChanged(val);
+              setState(() {}); // Update clear button visibility
+            },
           ),
         ),
         if (_isSearching && _searchController.text.isNotEmpty)
           Expanded(child: _buildSearchResultsListView(me))
         else
-          Expanded(child: _buildFriendsList(me.friends)),
+          Expanded(child: _buildFriendsAndContactsList(me, searchQuery)),
+      ],
+    );
+  }
+
+  Widget _buildFriendsAndContactsList(UserModel me, String searchQuery) {
+    // Filter friends by search
+    final friends = searchQuery.isEmpty
+        ? me.friends
+        : me.friends.where((f) =>
+            f.displayName.toLowerCase().contains(searchQuery) ||
+            f.email.toLowerCase().contains(searchQuery)).toList();
+
+    // Filter phone contacts by search, and exclude existing friends
+    final friendEmails = me.friends.map((f) => f.email.toLowerCase()).toSet();
+    final filteredContacts = _phoneContacts.where((c) {
+      // Exclude contacts that are already friends (match by email)
+      final contactEmails = c.emails.map((e) => e.address.toLowerCase()).toSet();
+      if (contactEmails.intersection(friendEmails).isNotEmpty) return false;
+      // Filter by search
+      if (searchQuery.isNotEmpty) {
+        return c.displayName.toLowerCase().contains(searchQuery) ||
+            c.phones.any((p) => p.number.contains(searchQuery));
+      }
+      return true;
+    }).toList();
+
+    return CustomScrollView(
+      slivers: [
+        // ─── Friends Section ───────────────────────────────────
+        if (friends.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Your Friends',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final friend = friends[index];
+                return ListTile(
+                  leading: AvatarImage(url: friend.photoUrl),
+                  title: Text(friend.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(friend.email),
+                  trailing: Icon(Icons.check_circle, color: AppTheme.success, size: 20),
+                );
+              },
+              childCount: friends.length,
+            ),
+          ),
+        ] else if (searchQuery.isEmpty) ...[
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(Icons.people_outline, size: 48, color: Colors.grey),
+                  SizedBox(height: 12),
+                  Text(
+                    'No friends yet',
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Search above to find users or invite contacts below!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        // ─── Divider ───────────────────────────────────────────
+        if (friends.isNotEmpty && (filteredContacts.isNotEmpty || !_contactsLoaded))
+          SliverToBoxAdapter(
+            child: Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey[300]),
+          ),
+
+        // ─── Phone Contacts Section ──────────────────────────
+        if (_contactsPermissionDenied)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  const Icon(Icons.contacts_outlined, size: 48, color: Colors.grey),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Contacts permission denied',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _loadPhoneContacts,
+                    child: const Text('Grant Permission'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (!_contactsLoaded)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (filteredContacts.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Invite from Contacts',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryAmber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${filteredContacts.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryAmber,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final contact = filteredContacts[index];
+                final phone = contact.phones.isNotEmpty ? contact.phones.first.number : 'No phone';
+                
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primaryAmber.withValues(alpha: 0.15),
+                    child: Text(
+                      contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: AppTheme.primaryAmber,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text(contact.displayName, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  subtitle: Text(phone, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                  trailing: OutlinedButton.icon(
+                    onPressed: () => _inviteContact(contact),
+                    icon: const Icon(Icons.send, size: 16),
+                    label: const Text('Invite'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryAmber,
+                      side: BorderSide(color: AppTheme.primaryAmber.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                  ),
+                );
+              },
+              childCount: filteredContacts.length,
+            ),
+          ),
+        ],
+
+        // Bottom padding for nav bar
+        const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
       ],
     );
   }
@@ -212,45 +483,16 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
       );
   }
 
-  Widget _buildFriendsList(List<FriendProfile> friends) {
-    if (friends.isEmpty) {
-      return const Center(child: Text('No friends yet. Search above to add some!'));
-    }
-    
-    return ListView.builder(
-      itemCount: friends.length,
-      itemBuilder: (context, index) {
-        final friend = friends[index];
-        return ListTile(
-          leading: AvatarImage(url: friend.photoUrl),
-          title: Text(friend.displayName),
-          subtitle: Text(friend.email),
-          onTap: () {
-             // Navigate to friend's profile
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildRequestsList(List<String> requestIds) {
     if (requestIds.isEmpty) {
       return const Center(child: Text('No pending requests'));
     }
 
-    // transform list of IDs into a stream of List<UserModel>?
-    // Actually, simpler: Just use a widget that watches a provider for THESE users.
-    // Or, since we want instant updates, we can just key the FutureBuilder?
-    // No, FutureBuilder is not 'instant' enough if the underlying data changes. 
-    // Ideally, we should stream each user document.
-    
-    // For now, let's allow manual refresh or auto-refresh by keying it to the length/IDs.
     return RefreshIndicator(
       onRefresh: () async {
-        setState(() {}); // Triggers rebuild of FutureBuilder
+        setState(() {});
       },
       child: FutureBuilder<List<UserModel>>(
-        // Key the FutureBuilder so it rebuilds when the list of IDs changes instantly
         key: ValueKey(requestIds.join(',')), 
         future: ref.read(firestoreServiceProvider).getUsers(requestIds),
         builder: (context, snapshot) {
@@ -258,7 +500,6 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-             // Allow retry
              return Center(
                child: Column(
                  mainAxisAlignment: MainAxisAlignment.center,

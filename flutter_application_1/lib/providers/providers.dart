@@ -112,3 +112,12 @@ class TemporarilyHiddenHivesNotifier extends Notifier<Set<String>> {
 }
 
 final temporarilyHiddenHivesProvider = NotifierProvider<TemporarilyHiddenHivesNotifier, Set<String>>(TemporarilyHiddenHivesNotifier.new);
+
+// ─── Wish Notification Provider ─────────────────────────────────────
+
+/// Streams count of unseen fulfilled wishes (friend fulfilled, owner hasn't seen).
+final unseenFulfilledCountProvider = StreamProvider<int>((ref) {
+  final uid = ref.watch(uidProvider);
+  if (uid == null) return Stream.value(0);
+  return ref.watch(firestoreServiceProvider).unseenFulfilledWishesCount();
+});

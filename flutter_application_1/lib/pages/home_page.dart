@@ -38,11 +38,16 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _currentNavIndex = 0;
   late StreamSubscription _intentDataStreamSubscription;
   bool _isHandlingShare = false;
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
     super.initState();
     _initShareIntent();
+    // Show skeletons briefly on first load for smooth transition
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) setState(() => _isInitialLoad = false);
+    });
   }
 
   @override
@@ -77,37 +82,73 @@ class _HomePageState extends ConsumerState<HomePage> {
     String? foundImage;
     String? foundText;
 
-    // Helper regex that handles URLs embedded in text better.
-    // Enhanced for Blinkit/Amazon/General: Enforces http/https to avoid false positives in text, 
-    // but captures the full URL correctly even if surrounded by other characters.
+    // URL regex: In Dart raw strings (r'...'), backslash is NOT doubled.
+    // Single \ is the regex escape character in raw strings.
     final urlRegExp = RegExp(
-      r'https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)',
+      r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)',
       caseSensitive: false,
     );
 
+    // Debug: Log all shared content to help diagnose share issues
+    for (int i = 0; i < files.length; i++) {
+      debugPrint('SharedFile[$i]: type=${files[i].type.value}, path="${files[i].path}", mimeType=${files[i].mimeType}, message=${files[i].message}');
+    }
+
     // Iterate through all shared content to find best URL and Text
     for (final file in files) {
-      if (file.type == SharedMediaType.text) {
-        // If we haven't found a text yet, or this one is longer (more likely to be description), keep it.
-        // But for Blinkit, the URL might be INSIDE the text.
-        if (foundText == null || file.path.length > (foundText?.length ?? 0)) {
-            foundText = file.path;
+      final content = file.path;
+      final message = file.message ?? '';
+      
+      if (file.type == SharedMediaType.url) {
+        // Direct URL sharing (some apps like Blinkit use this type)
+        foundUrl ??= content;
+      } else if (file.type == SharedMediaType.text || file.type == SharedMediaType.file) {
+        // Text sharing — URL might be embedded inside the text
+        if (foundText == null || content.length > (foundText?.length ?? 0)) {
+          foundText = content;
         }
         
-        // Try extract URL if we haven't found one yet
+        // Try extract URL from the text/content
         if (foundUrl == null) {
-            // Find ALL matches, prioritize HTTP ones
-            final matches = urlRegExp.allMatches(file.path);
-            for (final match in matches) {
-              final val = match.group(0);
-              if (val != null) {
-                 foundUrl = val;
-                 break; 
-              }
+          final matches = urlRegExp.allMatches(content);
+          for (final match in matches) {
+            final val = match.group(0);
+            if (val != null) {
+               foundUrl = val;
+               break; 
             }
+          }
         }
       } else if (file.type == SharedMediaType.image) {
-        foundImage ??= file.path; // Keep first image
+        foundImage ??= content; // Keep first image
+      }
+      
+      // Also check the message field (iOS sends text in message, Android in path)
+      if (foundUrl == null && message.isNotEmpty) {
+        final matches = urlRegExp.allMatches(message);
+        for (final match in matches) {
+          final val = match.group(0);
+          if (val != null) {
+            foundUrl = val;
+            break;
+          }
+        }
+        if (foundText == null && message.length > 5) {
+          foundText = message;
+        }
+      }
+      
+      // Also try to extract URL from ANY shared path regardless of type
+      // (some apps tag media type incorrectly)
+      if (foundUrl == null && content.isNotEmpty) {
+        final matches = urlRegExp.allMatches(content);
+        for (final match in matches) {
+          final val = match.group(0);
+          if (val != null) {
+            foundUrl = val;
+            break;
+          }
+        }
       }
     }
 
@@ -271,8 +312,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        reverseTransitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (context, animation, secondaryAnimation) =>
             ProductDetailPage(
           hiveId: hive.id,
@@ -305,6 +346,25 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // Pre-extract home content to keep build clean
     Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
+      // Show skeletons during initial load for smooth transition from login
+      if (_isInitialLoad) {
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            const _FriendFeedSkeleton(),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: _HiveCardSkeleton(),
+                ),
+                childCount: 4,
+              ),
+            ),
+          ],
+        );
+      }
+
       final friendHivesAsync = ref.watch(friendFeedProvider);
       final temporarilyHidden = ref.watch(temporarilyHiddenHivesProvider);
 
@@ -584,7 +644,23 @@ class _HomePageState extends ConsumerState<HomePage> {
           setState(() => _currentNavIndex = index);
         },
         items: [
-          const Icon(Icons.home, size: 28),
+          // Badge for unseen fulfilled wishes
+          Consumer(
+            builder: (context, ref, child) {
+              final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
+              
+              if (unseenCount == 0) {
+                return const Icon(Icons.home, size: 28);
+              }
+
+              return Badge(
+                label: Text('$unseenCount'),
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+                child: const Icon(Icons.home, size: 28),
+              );
+            },
+          ),
           
           // Badge for Friend Requests
           Consumer(

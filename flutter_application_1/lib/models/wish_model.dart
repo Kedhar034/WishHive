@@ -14,6 +14,7 @@ class WishModel {
   final DateTime? createdAt;
   final String fulfilledBy;
   final String fulfilledByName;
+  final bool ownerSeen; // false when a friend fulfills — triggers notification dot
 
   WishModel({
     required this.id,
@@ -29,6 +30,7 @@ class WishModel {
     this.createdAt,
     this.fulfilledBy = '',
     this.fulfilledByName = '',
+    this.ownerSeen = true,
   });
 
   factory WishModel.fromFirestore(DocumentSnapshot doc) {
@@ -47,6 +49,7 @@ class WishModel {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       fulfilledBy: data['fulfilledBy'] as String? ?? '',
       fulfilledByName: data['fulfilledByName'] as String? ?? '',
+      ownerSeen: data['ownerSeen'] as bool? ?? true,
     );
   }
 
@@ -64,6 +67,7 @@ class WishModel {
       'createdAt': FieldValue.serverTimestamp(),
       'fulfilledBy': fulfilledBy,
       'fulfilledByName': fulfilledByName,
+      'ownerSeen': ownerSeen,
     };
   }
 
@@ -81,6 +85,7 @@ class WishModel {
     DateTime? createdAt,
     String? fulfilledBy,
     String? fulfilledByName,
+    bool? ownerSeen,
   }) {
     return WishModel(
       id: id ?? this.id,
@@ -96,6 +101,7 @@ class WishModel {
       createdAt: createdAt ?? this.createdAt,
       fulfilledBy: fulfilledBy ?? this.fulfilledBy,
       fulfilledByName: fulfilledByName ?? this.fulfilledByName,
+      ownerSeen: ownerSeen ?? this.ownerSeen,
     );
   }
 

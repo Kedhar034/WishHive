@@ -39,8 +39,8 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
     Navigator.push(
       context,
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        reverseTransitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (context, animation, secondaryAnimation) =>
             ProductDetailPage(
           hiveId: hive.id,

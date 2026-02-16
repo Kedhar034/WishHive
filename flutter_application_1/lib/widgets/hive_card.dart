@@ -70,7 +70,10 @@ class HiveCard extends StatelessWidget {
     if (heroTag != null) {
       imageWidget = Hero(
         tag: heroTag!,
-        child: imageWidget,
+        child: Material(
+          type: MaterialType.transparency,
+          child: imageWidget,
+        ),
       );
     }
 
