@@ -15,6 +15,7 @@ import 'welcome_page.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/locale_provider.dart';
+import '../services/share_logger.dart'; // Import ShareLogger
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -280,6 +281,50 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  void _showLogs() async {
+    final logs = await ShareLogger.readLogs();
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Share Logs'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(logs),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await ShareLogger.clearLogs();
+              Navigator.pop(context);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Logs cleared')),
+                );
+              }
+            },
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: () {
+               Clipboard.setData(ClipboardData(text: logs));
+               ScaffoldMessenger.of(context).showSnackBar(
+                 const SnackBar(content: Text('Copied to clipboard')),
+               );
+            },
+            child: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final myUserAsync = ref.watch(currentUserStreamProvider); 
@@ -297,7 +342,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         data: (user) {
           if (user == null) return const Center(child: Text('User not signed in'));
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Added bottom padding for navbar
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -428,6 +474,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   tileColor: Colors.grey[50],
                   onTap: _shareApp,
+                ),
+
+                const SizedBox(height: 32),
+                
+                // Debug Section
+                Text(
+                  'Debug',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.bug_report_outlined),
+                  title: const Text('View Share Logs'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  tileColor: Colors.grey[50],
+                  onTap: _showLogs,
                 ),
 
                 const SizedBox(height: 40),

@@ -90,7 +90,13 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
        }
     } else {
        // Shared Image
-       _networkImageUrl = widget.initialImageUrl;
+       if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+         if (ImageStorageService.isLocalPath(widget.initialImageUrl!)) {
+           _selectedImage = File(widget.initialImageUrl!);
+         } else {
+           _networkImageUrl = widget.initialImageUrl;
+         }
+       }
     }
   }
   

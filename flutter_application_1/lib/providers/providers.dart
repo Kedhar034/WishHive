@@ -121,3 +121,10 @@ final unseenFulfilledCountProvider = StreamProvider<int>((ref) {
   if (uid == null) return Stream.value(0);
   return ref.watch(firestoreServiceProvider).unseenFulfilledWishesCount();
 });
+
+/// Streams map of HiveID -> Unseen Count.
+final unseenWishesByHiveProvider = StreamProvider<Map<String, int>>((ref) {
+  final uid = ref.watch(uidProvider);
+  if (uid == null) return Stream.value({});
+  return ref.watch(firestoreServiceProvider).unseenWishesByHiveStream();
+});

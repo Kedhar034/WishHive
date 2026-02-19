@@ -56,8 +56,7 @@ dependencies:
   path_provider: ^2.1.0
   uuid: ^4.0.0
   google_fonts: ^6.1.0
-
-  receive_sharing_intent: ^1.4.5
+  receive_sharing_intent: ^1.8.1
   metadata_fetch: ^0.4.2
   cached_network_image: ^3.4.1
   shimmer: ^3.0.0

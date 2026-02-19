@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WishHive - Turn Wishes into Reality</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header / Nav -->
+        <header class="header">
+            <div class="logo-container">
+                <img src="WishHive.png" alt="WishHive Logo" class="logo">
+                <span class="brand-name">WishHive</span>
+            </div>
+            <a href="#" class="cta-button" style="background-color: #ccc; cursor: default;">Coming Soon</a>
+        </header>
+
+        <!-- Main Bento Grid Layout -->
+        <main class="bento-grid">
+
+            <!-- Hero Card (Large, Left) -->
+            <div class="card hero-card">
+                <div class="hero-content">
+                    <div class="badge">Coming Soon to App Store</div>
+                    <h1>Turn Your Wishes<br>Into Reality</h1>
+                    <p>Create, organize, and share your wish lists with friends and family. The smartest way to manage
+                        your desires.</p>
+                    <div class="hero-stats">
+                        <div class="stat">
+                            <span class="stat-val">4.9</span>
+                            <span class="stat-label">Rating</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-val">10k+</span>
+                            <span class="stat-label">Wishes</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-image-placeholder">
+                    <!-- Placeholder for App Screenshot -->
+                    <div class="phone-mockup">
+                        <img src="mockup.jpg" alt="App Screenshot"
+                            style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feature 1: Share (Top Right, Medium) -->
+            <div class="card feature-card feature-share">
+                <div class="icon-circle"><i class="fa-solid fa-share-nodes"></i></div>
+                <h3>Share from Anywhere</h3>
+                <p>Share links or images directly from any app to WishHive.</p>
+            </div>
+
+            <!-- Feature 2: Organize (Middle Right, Small) -->
+            <div class="card feature-card feature-organize">
+                <div class="icon-circle"><i class="fa-solid fa-layer-group"></i></div>
+                <h3>Organize</h3>
+                <p>Categorize into Hives.</p>
+            </div>
+
+            <!-- Feature 3: Friends (Middle Right, Small) -->
+            <div class="card feature-card feature-friends">
+                <div class="icon-circle"><i class="fa-solid fa-user-group"></i></div>
+                <h3>Connect</h3>
+                <p>Follow friends' lists.</p>
+            </div>
+
+            <!-- AI Feature (Bottom Left, Wide) -->
+            <div class="card ai-card">
+                <div class="ai-content">
+                    <h3>Smart Metadata Extraction</h3>
+                    <p>Paste a link, and we'll fetch the image, title, and price automatically. No manual entry needed.
+                    </p>
+                </div>
+                <div class="ai-visual">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+            </div>
+
+            <!-- Download / QR Card (Bottom Right, wide) -->
+            <div class="card download-card" id="download">
+                <div class="download-info">
+                    <h3>Coming Soon</h3>
+                    <p>We are putting the final touches on the hive.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 12px;">
+                        <a href="#" class="store-badge" style="background-color: #333; cursor: default;">
+                            <i class="fa-brands fa-google-play"></i>
+                            Google Play
+                        </a>
+                        <a href="#" class="store-badge" style="background-color: #333; cursor: default;">
+                            <i class="fa-brands fa-apple"></i>
+                            App Store
+                        </a>
+                    </div>
+                </div>
+                <!-- QR Code hidden for Coming Soon phase or can replace with mailing list sign up later -->
+                <div class="qr-placeholder" style="opacity: 0.5;">
+                    <i class="fa-solid fa-clock" style="font-size: 40px; color: #F5A623; margin: 30px;"></i>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Section: How It Works -->
+        <section class="section how-it-works">
+            <h2 class="section-title">How WishHive Works</h2>
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-number">01</div>
+                    <h3>Create a Hive</h3>
+                    <p>Start a new collection for birthdays, weddings, or just your daily wants. Give it a name and a
+                        cover image.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">02</div>
+                    <h3>Add Wishes</h3>
+                    <p>Paste a link from Amazon, Myntra, or anywhere. We'll grab the details. Or just upload a photo.
+                    </p>
+                </div>
+                <div class="step">
+                    <div class="step-number">03</div>
+                    <h3>Share & Receive</h3>
+                    <p>Share the Hive link with friends. They can mark items as "Fulfilled" without spoiling the
+                        surprise!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Occasions -->
+        <section class="section occasions">
+            <h2 class="section-title">For Every Moment That Matters</h2>
+            <p class="section-subtitle">Whether it's a life-changing event or just a Tuesday treat.</p>
+
+            <div class="occasions-grid">
+                <div class="occasion-card wedding">
+                    <div class="occ-icon"><i class="fa-solid fa-rings-wedding"></i></div>
+                    <h3>Weddings</h3>
+                    <p>Guide your guests to the gifts you actually need for your new life together. No more 5 toasters.
+                    </p>
+                </div>
+                <div class="occasion-card baby">
+                    <div class="occ-icon"><i class="fa-solid fa-baby-carriage"></i></div>
+                    <h3>Baby Showers</h3>
+                    <p> diapers, cribs, and cute onesies. Let friends support your parenting journey with exactly what
+                        fits.</p>
+                </div>
+                <div class="occasion-card birthday">
+                    <div class="occ-icon"><i class="fa-solid fa-cake-candles"></i></div>
+                    <h3>Birthdays</h3>
+                    <p>Stop receiving socks (unless you want them). Share your wishlist and get the things you've been
+                        eyeing all year.</p>
+                </div>
+                <div class="occasion-card holiday">
+                    <div class="occ-icon"><i class="fa-solid fa-sleigh"></i></div>
+                    <h3>Secret Santa</h3>
+                    <p>Perfect for office parties. Everyone creates a hive, names are drawn, and gifts are perfect. Zero
+                        stress.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Why Choose WishHive -->
+        <section class="section features-detailed">
+            <div class="feature-row">
+                <div class="feature-text">
+                    <h3><i class="fa-solid fa-globe"></i> From Any Store in the Universe</h3>
+                    <p>Don't be limited to Amazon. Add that handmade scarf from Etsy, the custom keyboard from a niche
+                        site, or even a local pottery class. If it has a link, it goes in the Hive.</p>
+                </div>
+                <div class="feature-text">
+                    <h3><i class="fa-solid fa-user-secret"></i> The "Spoiler-Free" Promise</h3>
+                    <p>When a friend buys a gift, they mark it as "Fulfilled". You see that someone bought it, but
+                        <strong>not who</strong> (until you reveal it) or <strong>which exact item</strong> if you
+                        choose the "Surprise Me" setting.
+                    </p>
+                </div>
+            </div>
+            <div class="feature-row">
+                <div class="feature-text">
+                    <h3><i class="fa-solid fa-mobile-screen"></i> Beautifully Organized</h3>
+                    <p>Forget messy spreadsheets or screenshot folders. WishHive presents your desires in a stunning,
+                        categorizable grid that's a joy to scroll through.</p>
+                </div>
+                <div class="feature-text">
+                    <h3><i class="fa-solid fa-share-nodes"></i> Share with a Click</h3>
+                    <p>Text it, WhatsApp it, or put the link in your bio. No app required for your friends to view your
+                        list (though the app makes it better!).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Community/Visuals -->
+        <section class="section community-showcase">
+            <h2 class="section-title">Join thousands of Hive Makers</h2>
+            <p class="section-subtitle">From tech gadgets to cozy home decor, see what others are collecting.</p>
+            <div class="image-scroller">
+                <!-- Using copied assets -->
+                <img src="images/c1.jpeg" alt="Community Hive 1">
+                <img src="images/c2.jpeg" alt="Community Hive 2">
+                <img src="images/c3.jpeg" alt="Community Hive 3">
+                <img src="images/c4.jpeg" alt="Community Hive 4">
+                <img src="images/c5.jpeg" alt="Community Hive 5">
+                <img src="images/c6.jpeg" alt="Community Hive 6">
+                <img src="images/c7.jpeg" alt="Community Hive 7">
+                <img src="images/c8.jpeg" alt="Community Hive 8">
+                <img src="images/c9.jpeg" alt="Community Hive 9">
+                <img src="images/c10.jpeg" alt="Community Hive 10">
+            </div>
+        </section>
+
+        <!-- Section: Testimonials -->
+        <section class="section testimonials">
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"Finally, a wishlist app that actually looks good! The link parsing is magic."</p>
+                <div class="user">- Sarah K.</div>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"I organized my entire wedding registry here. My family loved the notification feature."</p>
+                <div class="user">- James R.</div>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars">★★★★★</div>
+                <p>"The 'Specific Friends' privacy setting is exactly what I needed. Secure and simple."</p>
+                <div class="user">- Ananya M.</div>
+            </div>
+        </section>
+
+        <!-- Section: FAQ -->
+        <section class="section faq">
+            <h2 class="section-title">Frequently Asked Questions</h2>
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h4>Is it free?</h4>
+                    <p>Yes! WishHive is 100% free to use for unlimited Hives and Wishes.</p>
+                </div>
+                <div class="faq-item">
+                    <h4>Can friends see what I buy?</h4>
+                    <p>If you mark a wish as "Fulfilled", the owner won't know WHO bought it until they check the app,
+                        keeping the surprise alive!</p>
+                </div>
+                <div class="faq-item">
+                    <h4>Does it work with any store?</h4>
+                    <p>Yes, you can add links from any website. Our AI tries to fetch the details, or you can add them
+                        manually.</p>
+                </div>
+                <div class="faq-item">
+                    <h4>Is my data private?</h4>
+                    <p>Absolutely. You control who sees your Hives: Public, Friends Only, or Specific People.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="main-footer">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="WishHive.png" alt="WishHive" height="40">
+                    <span>WishHive</span>
+                </div>
+                <div class="footer-links">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Contact Support</a>
+                </div>
+                <p class="copyright">&copy; 2024 WishHive. Built with darker coffee and brighter ideas.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+
+</html>

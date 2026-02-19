@@ -572,6 +572,27 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs.length);
   }
 
+  /// Stream a map of HiveID -> Count of unseen fulfilled wishes.
+  Stream<Map<String, int>> unseenWishesByHiveStream() {
+    final uid = _uid;
+    if (uid == null) return Stream.value({});
+
+    return _wishesCollection(uid)
+        .where('ownerSeen', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) {
+           final Map<String, int> counts = {};
+           for (var doc in snapshot.docs) {
+             final data = doc.data() as Map<String, dynamic>;
+             final hiveId = data['hiveId'] as String?;
+             if (hiveId != null) {
+               counts[hiveId] = (counts[hiveId] ?? 0) + 1;
+             }
+           }
+           return counts;
+        });
+  }
+
   // ─── Friend Feed ──────────────────────────────────────────────────
 
   /// Fetch a feed of hives from friends.

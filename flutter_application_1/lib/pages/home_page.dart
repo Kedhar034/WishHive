@@ -24,6 +24,7 @@ import 'hidden_hives_page.dart';
 import 'marketplace_page.dart';
 import 'settings_page.dart';
 import '../services/metadata_service.dart';
+import '../services/share_logger.dart'; // Import ShareLogger
 import '../widgets/shimmer_loading.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -90,8 +91,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
 
     // Debug: Log all shared content to help diagnose share issues
-    for (int i = 0; i < files.length; i++) {
-      debugPrint('SharedFile[$i]: type=${files[i].type.value}, path="${files[i].path}", mimeType=${files[i].mimeType}, message=${files[i].message}');
+    try {
+       await ShareLogger.log('--- NEW SHARE RECEIVED ---');
+       for (int i = 0; i < files.length; i++) {
+         final logMsg = 'SharedFile[$i]: type=${files[i].type.value}, path="${files[i].path}", mimeType=${files[i].mimeType}, message=${files[i].message}';
+         debugPrint(logMsg);
+         await ShareLogger.log(logMsg);
+       }
+    } catch (e) {
+      debugPrint("Logging error: $e");
     }
 
     // Iterate through all shared content to find best URL and Text
@@ -123,32 +131,36 @@ class _HomePageState extends ConsumerState<HomePage> {
         foundImage ??= content; // Keep first image
       }
       
-      // Also check the message field (iOS sends text in message, Android in path)
-      if (foundUrl == null && message.isNotEmpty) {
-        final matches = urlRegExp.allMatches(message);
-        for (final match in matches) {
-          final val = match.group(0);
-          if (val != null) {
-            foundUrl = val;
-            break;
-          }
-        }
-        if (foundText == null && message.length > 5) {
-          foundText = message;
-        }
-      }
+      // 2024 Fix: Some apps (like Blinkit) might send an 'image' type but put the URL in the message 
+      // OR they might send a 'path' that is actually just text/url but labeled as image? (unlikely but possible)
+      // Check EVERYTHING for a URL if we haven't found one yet.
       
-      // Also try to extract URL from ANY shared path regardless of type
-      // (some apps tag media type incorrectly)
+      // Check Path for URL even if type is not text
       if (foundUrl == null && content.isNotEmpty) {
-        final matches = urlRegExp.allMatches(content);
-        for (final match in matches) {
-          final val = match.group(0);
-          if (val != null) {
-            foundUrl = val;
-            break;
-          }
-        }
+         final matchesContent = urlRegExp.allMatches(content);
+         for (final match in matchesContent) {
+            final val = match.group(0);
+            if (val != null) {
+               foundUrl = val;
+               break;
+            }
+         }
+      }
+
+      // Check Message for URL
+      if (foundUrl == null && message.isNotEmpty) {
+         final matchesMessage = urlRegExp.allMatches(message);
+         for (final match in matchesMessage) {
+            final val = match.group(0);
+            if (val != null) {
+               foundUrl = val;
+               break;
+            }
+         }
+         // If no URL found but we have message text, use it as description/title fallback
+         if (foundText == null && message.length > 5) {
+            foundText = message;
+         }
       }
     }
 
@@ -164,14 +176,14 @@ class _HomePageState extends ConsumerState<HomePage> {
          }
     }
 
+    // Special case for Amazon Short Links if they don't resolve well with Regex (sometimes they are just text)
+    // But regex should catch amzn.in/d/...
+
     String? initialTitle;
     String? initialImage = foundImage; // Use shared image by default
     String? finalUrl = foundUrl;
     
-    // Normalize URL if it starts with www (Legacy handling, though regex enforces http now)
-    if (finalUrl != null && !finalUrl.startsWith('http')) {
-      finalUrl = 'https://$finalUrl';
-    }
+    await ShareLogger.log('Processing Share: URL=$finalUrl, Image=$initialImage, Text=$foundText');
 
     if (finalUrl != null) {
       if (mounted) {
@@ -366,7 +378,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
 
       final friendHivesAsync = ref.watch(friendFeedProvider);
-      final temporarilyHidden = ref.watch(temporarilyHiddenHivesProvider);
+      final notificationCountsAsync = ref.watch(unseenWishesByHiveProvider);
+      final notificationCounts = notificationCountsAsync.value ?? {};
 
       return CustomScrollView(
         physics: const BouncingScrollPhysics(),
@@ -399,6 +412,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                         separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (context, index) {
                           final hive = hives[index];
+                          // Note: Friends hives don't usually show *YOUR* notifications, 
+                          // unless you are fulfilling them? 
+                          // Logic: unseenWishesByHiveProvider tracks 'ownerSeen: false'.
+                          // Only the owner sees these. So for friend hives, count is likely 0 unless you own it.
+                          // But just in case you own a hive that appears in friends list (weird edge case), strict ID match works.
+                          
                           return SizedBox(
                             width: 160, // Fixed width for horizontal items
                             child: GestureDetector(
@@ -414,6 +433,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                     : AppConstants.fallbackImage,
                                 ownerName: hive.ownerDisplayName,
                                 isCompact: true, // Use compact mode for slider
+                                // notificationCount: notificationCounts[hive.id] ?? 0, // usually 0 for friends hvie
                               ),
                             ),
                           );
@@ -480,6 +500,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     (context, index) {
                       final doc = hiveDocs[index];
                       final hive = HiveModel.fromFirestore(doc);
+                      final notifCount = notificationCounts[hive.id] ?? 0;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
@@ -494,6 +515,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             imageUrl: hive.imageUrl.isNotEmpty
                                 ? hive.imageUrl
                                 : AppConstants.fallbackImage,
+                            notificationCount: notifCount,
                           ),
                         ),
                       );
@@ -737,12 +759,13 @@ class _HiveCardSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 200,
+      height: 220,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.grey[200]!),
       ),
+      clipBehavior: Clip.antiAlias, // Ensure content doesn't bleed out
       child: ShimmerLoading(
         child: Column(
           

@@ -173,7 +173,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
       body: wishesAsync.when(
         data: (wishes) {
           return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
             slivers: [
               SliverAppBar(
                 expandedHeight: 240,

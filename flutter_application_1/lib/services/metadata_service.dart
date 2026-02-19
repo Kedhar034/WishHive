@@ -172,9 +172,18 @@ class MetadataService {
                image = '${uri.scheme}://${uri.host}/$image';
              }
           }
-        } catch (e) {
-          // ignore manual parse errors
-        }
+          } catch (e) {
+           // ignore manual parse errors
+          }
+      }
+
+      // Filter out invalid Amazon/Ad tracking pixels that masquerade as images
+      if (image != null) {
+          if (image!.contains('fls-eu.amazon') || 
+              image!.contains('pixel') || 
+              image!.contains('doubleclick')) {
+             image = null;
+          }
       }
       
       return LinkMetadata(

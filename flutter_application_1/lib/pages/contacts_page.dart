@@ -15,7 +15,7 @@ class ContactsPage extends ConsumerStatefulWidget {
   ConsumerState<ContactsPage> createState() => _ContactsPageState();
 }
 
-class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerProviderStateMixin {
+class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   List<UserModel> _searchResults = [];
@@ -29,14 +29,25 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // Listen to lifecycle changes
     _tabController = TabController(length: 2, vsync: this);
     _loadPhoneContacts();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reload contacts when user comes back to the app (e.g. from Settings)
+    if (state == AppLifecycleState.resumed) {
+       debugPrint('App resumed - reloading contacts...');
+       _loadPhoneContacts();
+    }
   }
 
   Timer? _debounce;
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     _searchController.dispose();
     _debounce?.cancel();
@@ -44,39 +55,70 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   }
 
   Future<void> _loadPhoneContacts() async {
-    // Step 1: Check permission separately
+    // 1. Check/Request permission
     bool hasPermission = false;
     try {
-      hasPermission = await FlutterContacts.requestPermission();
+       // requestPermission() returns true if granted, false otherwise
+       // readonly: true is often sufficient for listing
+       hasPermission = await FlutterContacts.requestPermission(readonly: true);
     } catch (e) {
-      debugPrint('Error requesting contacts permission: $e');
+       debugPrint("Permission request error: $e");
     }
 
     if (!hasPermission) {
-      if (mounted) setState(() => _contactsPermissionDenied = true);
+      if (mounted) {
+        setState(() => _contactsPermissionDenied = true);
+        // Optional: Show snackbar guiding to settings if believed to be permanently denied
+        // But since we can't distinguish 'permanently denied' easily without extra packages,
+        // we just show the "Grant Access" UI in the body.
+      }
       return;
     }
 
-    // Step 2: Permission granted — now load contacts
+    // 2. Permission granted — load contacts
     try {
-      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      debugPrint('Attempting to fetch contacts with properties...');
+      // Try fetching with properties first
+      final contacts = await FlutterContacts.getContacts(withProperties: true, withPhoto: true);
+      debugPrint('Contacts fetched: ${contacts.length}');
+      
+      if (contacts.isEmpty) {
+         debugPrint('Contacts list is empty. Asking to check system contacts.');
+      }
+
       contacts.sort((a, b) => a.displayName.compareTo(b.displayName));
       if (mounted) {
         setState(() {
           _phoneContacts = contacts;
           _contactsLoaded = true;
-          _contactsPermissionDenied = false; // Reset in case it was set before
+          _contactsPermissionDenied = false;
         });
       }
     } catch (e) {
-      debugPrint('Error loading contacts (permission OK): $e');
-      // Permission was granted but loading failed — don't show "denied" UI
-      if (mounted) {
-        setState(() {
-          _phoneContacts = [];
-          _contactsLoaded = true; // Show empty list, not "denied" UI
-          _contactsPermissionDenied = false;
-        });
+      debugPrint('Error loading contacts (withProperties): $e');
+      
+      // Fallback: Try fetching without properties (basics only)
+      try {
+        debugPrint('Attempting fallback fetch (no properties)...');
+        final basicContacts = await FlutterContacts.getContacts(withProperties: false);
+        debugPrint('Fallback contacts fetched: ${basicContacts.length}');
+        
+        if (mounted) {
+          setState(() {
+            _phoneContacts = basicContacts;
+            _contactsLoaded = true;
+            _contactsPermissionDenied = false;
+          });
+        }
+      } catch (e2) {
+         debugPrint('Critical error loading contacts: $e2');
+         if (mounted) {
+            setState(() {
+              _phoneContacts = [];
+              _contactsLoaded = true;
+              _contactsPermissionDenied = false;
+            });
+         }
       }
     }
   }
