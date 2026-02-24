@@ -7,7 +7,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:shimmer/shimmer.dart';
 
 import '../models/hive_model.dart';
 import '../providers/providers.dart';
@@ -15,7 +18,6 @@ import '../widgets/hive_card.dart';
 import '../core/constants/app_constants.dart';
 import 'product_detail_page.dart';
 import 'create_hive_sheet.dart';
-import 'create_wish_sheet.dart';
 import 'create_wish_sheet.dart';
 import 'welcome_page.dart';
 import 'contacts_page.dart';
@@ -26,6 +28,9 @@ import 'settings_page.dart';
 import '../services/metadata_service.dart';
 import '../services/share_logger.dart'; // Import ShareLogger
 import '../widgets/shimmer_loading.dart';
+import '../l10n/app_localizations.dart';
+import '../services/review_service.dart';
+import '../widgets/circular_logo.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -34,12 +39,20 @@ class HomePage extends ConsumerStatefulWidget {
   ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends ConsumerState<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderStateMixin {
   // Optimistic hiding state for friend slider moved to provider
   int _currentNavIndex = 0;
   late StreamSubscription _intentDataStreamSubscription;
   bool _isHandlingShare = false;
   bool _isInitialLoad = true;
+  late TabController _tabController; // Declared TabController
+
+  // Tutorial Keys
+  final GlobalKey _fabKey = GlobalKey();
+  final GlobalKey _hivesListKey = GlobalKey(); // To be assigned to the Hive List Sliver
+  final GlobalKey _hiddenHivesKey = GlobalKey(); // To be assigned to the Hidden Hives Icon
+  final GlobalKey _contactsTabKey = GlobalKey(); // To be assigned to the Contacts Tab
+  final GlobalKey _marketplaceTabKey = GlobalKey(); // To be assigned to the Marketplace Tab
 
   @override
   void initState() {
@@ -49,6 +62,206 @@ class _HomePageState extends ConsumerState<HomePage> {
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) setState(() => _isInitialLoad = false);
     });
+    
+    // Check for tutorial after frame build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+
+    // Check if we should request an in-app review
+    ReviewService.maybeRequestReview();
+  }
+
+  Future<void> _checkAndShowTutorial() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final bool hasSeenTutorial = prefs.getBool('has_seen_tutorial_${user.uid}') ?? false;
+
+    if (!hasSeenTutorial) {
+      // Delay slightly to ensure UI is ready
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) _showTutorial();
+      });
+    }
+  }
+
+  void _showTutorial() {
+    late TutorialCoachMark tutorialCoachMark;
+    
+    List<TargetFocus> targets = [];
+
+    // Target 1: Create Hive (FAB)
+    targets.add(
+      TargetFocus(
+        identify: "create_hive",
+        keyTarget: _fabKey,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Create a Hive",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(top: 10.0),
+                    child: Text(
+                      "Start by creating a new Hive (Wishlist) or a Wish. Tap the + button to get started.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // Target 2: Hidden Hives Icon
+    targets.add(
+      TargetFocus(
+        identify: "hidden_hives",
+        keyTarget: _hiddenHivesKey,
+        alignSkip: Alignment.bottomLeft,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right side if icon is on right
+                children: const [
+                  Text(
+                    "Hidden Hives",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(top: 10.0),
+                    child: Text(
+                      "If you hide any friend's hive, you can find them here. Tap the crossed eye icon to manage hidden content.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // Target 3: Contacts Tab
+    targets.add(
+      TargetFocus(
+        identify: "contacts_tab",
+        keyTarget: _contactsTabKey,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Friends & Contacts",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(top: 10.0),
+                    child: Text(
+                      "Find friends, search contacts, and send friend requests here to grow your Hive network.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // Target 4: Marketplace Tab
+    targets.add(
+      TargetFocus(
+        identify: "marketplace_tab",
+        keyTarget: _marketplaceTabKey,
+        alignSkip: Alignment.topRight, 
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Marketplace",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(top: 10.0),
+                    child: Text(
+                      "Discover products and gift ideas coming soon directly within the app!",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    tutorialCoachMark = TutorialCoachMark(
+      targets: targets,
+      colorShadow: Colors.black.withOpacity(0.8),
+      textSkip: "SKIP",
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('has_seen_tutorial_${user.uid}', true);
+        }
+      },
+      onSkip: () {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          SharedPreferences.getInstance().then((prefs) => 
+            prefs.setBool('has_seen_tutorial_${user.uid}', true));
+        }
+        return true; 
+      },
+    )..show(context: context);
   }
 
   @override
@@ -58,7 +271,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _initShareIntent() {
-    // For sharing or opening urls/text coming from outside the app while the app is in the memory
+    // ... existing implementation remains same, just ensuring we successfully replaced the block above ...
     _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((List<SharedMediaFile> value) {
       if (value.isNotEmpty && mounted) {
         _handleSharedFiles(value);
@@ -66,8 +279,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     }, onError: (err) {
       debugPrint("getIntentDataStream error: $err");
     });
-
-    // For sharing or opening urls/text coming from outside the app while the app is closed
+    
     ReceiveSharingIntent.instance.getInitialMedia().then((List<SharedMediaFile> value) {
       if (value.isNotEmpty && mounted) {
         _handleSharedFiles(value);
@@ -75,6 +287,353 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
   }
 
+  // ... (rest of methods) ...
+
+  Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
+    // Show skeletons during initial load for smooth transition from login
+    if (_isInitialLoad) {
+      return CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          const _FriendFeedSkeleton(),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => const Padding(
+                padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: _HiveCardSkeleton(),
+              ),
+              childCount: 4,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final friendHivesAsync = ref.watch(friendFeedProvider);
+    final notificationCountsAsync = ref.watch(unseenWishesByHiveProvider);
+    final notificationCounts = notificationCountsAsync.value ?? {};
+    final temporarilyHidden = ref.watch(temporarilyHiddenHivesProvider);
+
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        // 1. Friend Hives Section (Horizontal Slider)
+        friendHivesAsync.when(
+          data: (allHives) {
+            final hives = allHives.where((h) => !temporarilyHidden.contains(h.id)).toList();
+            if (hives.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+            return SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+                    child: Text(
+                      'From Your Friends',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 220, // Height for the horizontal cards
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: hives.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final hive = hives[index];
+                        return SizedBox(
+                          width: 160, // Fixed width for horizontal items
+                          child: GestureDetector(
+                            onTap: () => _openHiveDetail(hive, heroTag: 'friend-hive-${hive.id}'),
+                            onLongPress: () => _showHideHiveDialog(hive),
+                            child: HiveCard(
+                              heroTag: 'friend-hive-${hive.id}',
+                              title: hive.title,
+                              items: hive.itemCount,
+                              price: hive.totalCost,
+                              imageUrl: hive.imageUrl.isNotEmpty
+                                  ? hive.imageUrl
+                                  : AppConstants.fallbackImage,
+                              ownerName: hive.ownerDisplayName,
+                              isCompact: true, // Use compact mode for slider
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'My Hives',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+          loading: () => const _FriendFeedSkeleton(),
+          error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+        ),
+
+        // 2. My Hives Grid (Vertical)
+        hiveList.when(
+          data: (snapshot) {
+            final hiveDocs = snapshot.docs;
+            if (hiveDocs.isEmpty) {
+              return SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.hive_outlined,
+                        size: 80,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No hives yet',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tap + to create your first hive!',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final doc = hiveDocs[index];
+                    final hive = HiveModel.fromFirestore(doc);
+                    final notifCount = notificationCounts[hive.id] ?? 0;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: GestureDetector(
+                        onTap: () => _openHiveDetail(hive, heroTag: 'hive-${hive.id}'),
+                        onLongPress: () => _editHive(hive),
+                        child: HiveCard(
+                          heroTag: 'hive-${hive.id}',
+                          title: hive.title,
+                          items: hive.itemCount,
+                          price: hive.totalCost,
+                          imageUrl: hive.imageUrl.isNotEmpty
+                              ? hive.imageUrl
+                              : AppConstants.fallbackImage,
+                          notificationCount: notifCount,
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: hiveDocs.length,
+                ),
+              ),
+            );
+          },
+          loading: () => SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                return const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: _HiveCardSkeleton(),
+                );
+              },
+              childCount: 4,
+            ),
+          ),
+          error: (e, _) => SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text('Error loading hives: $e', textAlign: TextAlign.center),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ... existing build logic ...
+    return Scaffold(
+      extendBody: true,
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: Column(
+          children: [
+            // ─── Header ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
+              child: Row(
+                children: [
+                  Row(
+                    children: [
+                      const CircularLogo(size: 40, padding: 6, showShadow: false),
+                      const SizedBox(width: 12),
+                      Text(
+                        AppConstants.appName,
+                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  // Hidden Hives Icon with Tutorial Key
+                  GestureDetector(
+                    key: _hiddenHivesKey,
+                    onTap: () {
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(builder: (_) => const HiddenHivesPage()),
+                       );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(Icons.visibility_off_outlined,
+                          color: Theme.of(context).colorScheme.onSurface),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // ... (Rest of body) ...
+            Expanded(
+              child: IndexedStack(
+                index: _currentNavIndex,
+                children: [
+                   _buildHomeContent(ref.watch(hiveListProvider), Theme.of(context)),
+                   const ContactsPage(),
+                   const MarketplacePage(),
+                   const SettingsPage(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // ─── Speed Dial FAB ─────────────────────────────────────────
+      floatingActionButton: SpeedDial(
+        key: _fabKey, // Tutorial Key
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        overlayOpacity: 0.5,
+        spacing: 16,
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.star_outline),
+            label: AppLocalizations.of(context)!.createWish,
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+            onTap: _showCreateWishSheet,
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.hive_outlined),
+            label: AppLocalizations.of(context)!.createHive,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            onTap: _showCreateHiveSheet,
+          ),
+        ],
+      ),
+      
+      // ... (Bottom Nav) ...
+      bottomNavigationBar: CurvedNavigationBar(
+        index: _currentNavIndex,
+        backgroundColor: Colors.transparent,
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+        buttonBackgroundColor: Theme.of(context).colorScheme.primary,
+        animationDuration: const Duration(milliseconds: 300),
+        onTap: (index) {
+          setState(() => _currentNavIndex = index);
+        },
+        items: [
+          // Badge for unseen fulfilled wishes
+          Consumer(
+            builder: (context, ref, child) {
+              final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
+              
+              if (unseenCount == 0) {
+                return const Icon(Icons.home, size: 28);
+              }
+
+              return Badge(
+                label: Text('$unseenCount'),
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+                child: const Icon(Icons.home, size: 28),
+              );
+            },
+          ),
+          
+          // Badge for Friend Requests
+          Consumer(
+            builder: (context, ref, child) {
+              final user = ref.watch(currentUserStreamProvider).value;
+              final requestCount = user?.friendRequestsReceived.length ?? 0;
+              
+              if (requestCount == 0) {
+                 return Container(key: _contactsTabKey, child: const Icon(Icons.people, size: 28));
+              }
+
+              return Container(
+                key: _contactsTabKey,
+                child: Badge(
+                  label: Text('$requestCount'),
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                  child: const Icon(Icons.people, size: 28),
+                ),
+              );
+            },
+          ),
+          
+          Container(key: _marketplaceTabKey, child: const Icon(Icons.shopping_bag_outlined, size: 28)),
+          const Icon(Icons.settings_outlined, size: 28),
+        ],
+      ),
+    );
+  }
+
+  // No changes needed here, just deleting the duplicate block. But I must provide valid content for _handleSharedFiles first.
+  
   Future<void> _handleSharedFiles(List<SharedMediaFile> files) async {
     if (_isHandlingShare) return;
     _isHandlingShare = true;
@@ -84,13 +643,12 @@ class _HomePageState extends ConsumerState<HomePage> {
     String? foundText;
 
     // URL regex: In Dart raw strings (r'...'), backslash is NOT doubled.
-    // Single \ is the regex escape character in raw strings.
     final urlRegExp = RegExp(
       r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)',
       caseSensitive: false,
     );
 
-    // Debug: Log all shared content to help diagnose share issues
+    // Debug: Log all shared content
     try {
        await ShareLogger.log('--- NEW SHARE RECEIVED ---');
        for (int i = 0; i < files.length; i++) {
@@ -102,21 +660,19 @@ class _HomePageState extends ConsumerState<HomePage> {
       debugPrint("Logging error: $e");
     }
 
-    // Iterate through all shared content to find best URL and Text
+    // Iterate through all shared content
     for (final file in files) {
       final content = file.path;
       final message = file.message ?? '';
       
       if (file.type == SharedMediaType.url) {
-        // Direct URL sharing (some apps like Blinkit use this type)
         foundUrl ??= content;
       } else if (file.type == SharedMediaType.text || file.type == SharedMediaType.file) {
-        // Text sharing — URL might be embedded inside the text
         if (foundText == null || content.length > (foundText?.length ?? 0)) {
           foundText = content;
         }
         
-        // Try extract URL from the text/content
+        // Try extract URL from text
         if (foundUrl == null) {
           final matches = urlRegExp.allMatches(content);
           for (final match in matches) {
@@ -128,14 +684,10 @@ class _HomePageState extends ConsumerState<HomePage> {
           }
         }
       } else if (file.type == SharedMediaType.image) {
-        foundImage ??= content; // Keep first image
+        foundImage ??= content; 
       }
       
-      // 2024 Fix: Some apps (like Blinkit) might send an 'image' type but put the URL in the message 
-      // OR they might send a 'path' that is actually just text/url but labeled as image? (unlikely but possible)
-      // Check EVERYTHING for a URL if we haven't found one yet.
-      
-      // Check Path for URL even if type is not text
+      // Fallback Checks
       if (foundUrl == null && content.isNotEmpty) {
          final matchesContent = urlRegExp.allMatches(content);
          for (final match in matchesContent) {
@@ -147,7 +699,6 @@ class _HomePageState extends ConsumerState<HomePage> {
          }
       }
 
-      // Check Message for URL
       if (foundUrl == null && message.isNotEmpty) {
          final matchesMessage = urlRegExp.allMatches(message);
          for (final match in matchesMessage) {
@@ -157,14 +708,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                break;
             }
          }
-         // If no URL found but we have message text, use it as description/title fallback
          if (foundText == null && message.length > 5) {
             foundText = message;
          }
       }
     }
 
-    // Fallback: Check if the text itself contains a URL if regex didn't catch it inside loop
+    // Fallback if no URL found in loop but inside text
     if (foundUrl == null && foundText != null) {
          final matches = urlRegExp.allMatches(foundText);
          for (final match in matches) {
@@ -176,11 +726,8 @@ class _HomePageState extends ConsumerState<HomePage> {
          }
     }
 
-    // Special case for Amazon Short Links if they don't resolve well with Regex (sometimes they are just text)
-    // But regex should catch amzn.in/d/...
-
     String? initialTitle;
-    String? initialImage = foundImage; // Use shared image by default
+    String? initialImage = foundImage; 
     String? finalUrl = foundUrl;
     
     await ShareLogger.log('Processing Share: URL=$finalUrl, Image=$initialImage, Text=$foundText');
@@ -194,19 +741,21 @@ class _HomePageState extends ConsumerState<HomePage> {
 
       final metadata = await MetadataService.extract(finalUrl);
       if (metadata != null) {
-        initialTitle = metadata.title;
+        String? title = metadata.title;
+        if (title != null && title.length > 50) {
+          title = '${title.substring(0, 50)}...';
+        }
+        initialTitle = title;
         if (metadata.imageUrl?.isNotEmpty ?? false) {
           initialImage = metadata.imageUrl;
         }
       }
     } else {
-        // No URL found. Use text as title if available.
         initialTitle = foundText;
     }
 
     if (mounted) {
       _isHandlingShare = false;
-      
       showMaterialModalBottomSheet(
         context: context,
         expand: false,
@@ -279,15 +828,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                // Optimistic Update: Hide immediately from slider
                 ref.read(temporarilyHiddenHivesProvider.notifier).add(hive.id);
-
-                // Hide in backend
                 await ref.read(firestoreServiceProvider).hideHive(hive.id);
-                
-                // Do NOT invalidate immediately to avoid jitter
-                // ref.invalidate(friendFeedProvider); 
-
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -304,7 +846,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   );
                 }
               } catch (e) {
-                // Revert if failed
                 ref.read(temporarilyHiddenHivesProvider.notifier).remove(hive.id);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -334,6 +875,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ownerId: hive.ownerId,
           ownerDisplayName: hive.ownerDisplayName,
           heroTag: heroTag,
+          allowedEditorIds: hive.allowedEditorIds,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -348,368 +890,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    ref.watch(uploadServiceProvider);
-    final uid = ref.watch(uidProvider);
-    
-    final hiveListAsync = ref.watch(hiveListProvider);
-    final theme = Theme.of(context);
-
-    // Pre-extract home content to keep build clean
-    Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
-      // Show skeletons during initial load for smooth transition from login
-      if (_isInitialLoad) {
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            const _FriendFeedSkeleton(),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
-                  child: _HiveCardSkeleton(),
-                ),
-                childCount: 4,
-              ),
-            ),
-          ],
-        );
-      }
-
-      final friendHivesAsync = ref.watch(friendFeedProvider);
-      final notificationCountsAsync = ref.watch(unseenWishesByHiveProvider);
-      final notificationCounts = notificationCountsAsync.value ?? {};
-
-      return CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // 1. Friend Hives Section (Horizontal Slider)
-          friendHivesAsync.when(
-            data: (allHives) {
-              final hives = allHives.where((h) => !temporarilyHidden.contains(h.id)).toList();
-              if (hives.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-              return SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
-                      child: Text(
-                        'From Your Friends',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 220, // Height for the horizontal cards
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: hives.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) {
-                          final hive = hives[index];
-                          // Note: Friends hives don't usually show *YOUR* notifications, 
-                          // unless you are fulfilling them? 
-                          // Logic: unseenWishesByHiveProvider tracks 'ownerSeen: false'.
-                          // Only the owner sees these. So for friend hives, count is likely 0 unless you own it.
-                          // But just in case you own a hive that appears in friends list (weird edge case), strict ID match works.
-                          
-                          return SizedBox(
-                            width: 160, // Fixed width for horizontal items
-                            child: GestureDetector(
-                              onTap: () => _openHiveDetail(hive, heroTag: 'friend-hive-${hive.id}'),
-                              onLongPress: () => _showHideHiveDialog(hive),
-                              child: HiveCard(
-                                heroTag: 'friend-hive-${hive.id}',
-                                title: hive.title,
-                                items: hive.itemCount,
-                                price: hive.totalCost,
-                                imageUrl: hive.imageUrl.isNotEmpty
-                                    ? hive.imageUrl
-                                    : AppConstants.fallbackImage,
-                                ownerName: hive.ownerDisplayName,
-                                isCompact: true, // Use compact mode for slider
-                                // notificationCount: notificationCounts[hive.id] ?? 0, // usually 0 for friends hvie
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'My Hives',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              );
-            },
-            loading: () => const _FriendFeedSkeleton(),
-            error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-          ),
-
-          // 2. My Hives Grid (Vertical)
-          hiveList.when(
-            data: (snapshot) {
-              final hiveDocs = snapshot.docs;
-              if (hiveDocs.isEmpty) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.hive_outlined,
-                          size: 80,
-                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No hives yet',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap + to create your first hive!',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final doc = hiveDocs[index];
-                      final hive = HiveModel.fromFirestore(doc);
-                      final notifCount = notificationCounts[hive.id] ?? 0;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: GestureDetector(
-                          onTap: () => _openHiveDetail(hive, heroTag: 'hive-${hive.id}'),
-                          onLongPress: () => _editHive(hive),
-                          child: HiveCard(
-                            heroTag: 'hive-${hive.id}',
-                            title: hive.title,
-                            items: hive.itemCount,
-                            price: hive.totalCost,
-                            imageUrl: hive.imageUrl.isNotEmpty
-                                ? hive.imageUrl
-                                : AppConstants.fallbackImage,
-                            notificationCount: notifCount,
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: hiveDocs.length,
-                  ),
-                ),
-              );
-            },
-            loading: () => SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return const Padding(
-                    padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
-                    child: _HiveCardSkeleton(),
-                  );
-                },
-                childCount: 4,
-              ),
-            ),
-            error: (e, _) => SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Text('Error loading hives: $e', textAlign: TextAlign.center),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Scaffold(
-      extendBody: true,
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          children: [
-            // ─── Header ─────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
-              child: Row(
-                children: [
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/images/WishHive.png',
-                        height: 40,
-                        width: 40,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        AppConstants.appName,
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () {
-                      // TODO: Implement sort/filter menu
-                    },
-                    icon: const Icon(Icons.sort_rounded, size: 28), // Three dashes style
-                    tooltip: 'Sort & Filter',
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 28, color: Colors.black87),
-                    tooltip: 'More Options',
-                    onSelected: (value) {
-                      if (value == 'hidden_hives') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const HiddenHivesPage()),
-                        );
-                      }
-                    },
-                    itemBuilder: (BuildContext context) {
-                      return [
-                        const PopupMenuItem<String>(
-                          value: 'hidden_hives',
-                          child: Row(
-                            children: [
-                              Icon(Icons.visibility_off_outlined, color: Colors.grey),
-                              SizedBox(width: 8),
-                              Text('Hidden Hives'),
-                            ],
-                          ),
-                        ),
-                      ];
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // ─── Main Content ───────────────────────────────────────
-            Expanded(
-              child: IndexedStack(
-                index: _currentNavIndex,
-                children: [
-                   _buildHomeContent(hiveListAsync, theme),
-                   const ContactsPage(),
-                   const MarketplacePage(),
-                   const SettingsPage(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      // ─── Speed Dial FAB ─────────────────────────────────────────
-      floatingActionButton: SpeedDial(
-        icon: Icons.add,
-        activeIcon: Icons.close,
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: Colors.white,
-        overlayOpacity: 0.5,
-        spacing: 16,
-        children: [
-          SpeedDialChild(
-            child: const Icon(Icons.star_outline),
-            label: 'Create a Wish',
-            backgroundColor: theme.colorScheme.secondary,
-            onTap: _showCreateWishSheet,
-          ),
-          SpeedDialChild(
-            child: const Icon(Icons.hive_outlined),
-            label: 'Create a Hive',
-            backgroundColor: theme.colorScheme.primary,
-            onTap: _showCreateHiveSheet,
-          ),
-        ],
-      ),
-
-      // ─── Bottom Nav ─────────────────────────────────────────────
-      bottomNavigationBar: CurvedNavigationBar(
-        index: _currentNavIndex,
-        backgroundColor: Colors.transparent,
-        color: theme.colorScheme.primary.withValues(alpha: 0.15),
-        buttonBackgroundColor: theme.colorScheme.primary,
-        animationDuration: const Duration(milliseconds: 300),
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-        },
-        items: [
-          // Badge for unseen fulfilled wishes
-          Consumer(
-            builder: (context, ref, child) {
-              final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
-              
-              if (unseenCount == 0) {
-                return const Icon(Icons.home, size: 28);
-              }
-
-              return Badge(
-                label: Text('$unseenCount'),
-                backgroundColor: Colors.red,
-                textColor: Colors.white,
-                child: const Icon(Icons.home, size: 28),
-              );
-            },
-          ),
-          
-          // Badge for Friend Requests
-          Consumer(
-            builder: (context, ref, child) {
-              final user = ref.watch(currentUserStreamProvider).value;
-              final requestCount = user?.friendRequestsReceived.length ?? 0;
-              
-              if (requestCount == 0) {
-                return const Icon(Icons.people, size: 28);
-              }
-
-              return Badge(
-                label: Text('$requestCount'),
-                backgroundColor: Colors.red,
-                textColor: Colors.white,
-                child: const Icon(Icons.people, size: 28),
-              );
-            },
-          ),
-          
-          const Icon(Icons.shopping_bag_outlined, size: 28),
-          const Icon(Icons.settings_outlined, size: 28),
-        ],
-      ),
-    );
-  }
-}
+} // End of class _HomePageState
 
 class _FriendFeedSkeleton extends StatelessWidget {
   const _FriendFeedSkeleton();
@@ -717,37 +898,54 @@ class _FriendFeedSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
-            child: ShimmerLoading(
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[300]!,
+        highlightColor: Colors.grey[100]!,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
               child: Container(
-                height: 20, 
-                width: 150, 
+                width: 150,
+                height: 24,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
-          ),
-          SizedBox(
-            height: 220,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              scrollDirection: Axis.horizontal,
-              itemCount: 3,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, __) => const SizedBox(
-                width: 160,
-                child: _HiveCardSkeleton(), // Reusing the existing vertical skeleton but constrained by width
+            SizedBox(
+              height: 220,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, __) => Container(
+                  width: 160,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-        ],
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                width: 100,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -758,55 +956,17 @@ class _HiveCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 220,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      clipBehavior: Clip.antiAlias, // Ensure content doesn't bleed out
-      child: ShimmerLoading(
-        child: Column(
-          
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white, // Color doesn't matter much due to shimmer
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-              ),
-            ),
-            // Content
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(height: 20, width: 150, color: Colors.white),
-                    const SizedBox(height: 8),
-                    Container(height: 14, width: 100, color: Colors.white),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Container(height: 14, width: 60, color: Colors.white),
-                        const Spacer(),
-                        Container(height: 14, width: 40, color: Colors.white),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Container(
+        height: 200,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
     );
   }
 }
+

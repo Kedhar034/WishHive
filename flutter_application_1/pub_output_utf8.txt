@@ -1,0 +1,28 @@
+﻿Resolving dependencies...
+flutter : Because firebase_remote_config 
+6.1.4 depends on firebase_core ^4.4.0 and 
+no versions of firebase_remote_config 
+match >6.1.4 <7.0.0, 
+firebase_remote_config ^6.1.4 requires 
+firebase_core ^4.4.0.
+At line:1 char:1
++ flutter pub get > pub_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : 
+NotSpecified: (Be    cause 
+firebas...se_core ^4.4.0.:String) [],     
+RemoteException
+    + FullyQualifiedErrorId : 
+NativeCommandErro    r
+ 
+So, because flutter_application_1 depends 
+on both firebase_core ^3.10.1 and 
+firebase_remote_config ^6.1.4, version 
+solving failed.
+
+
+You can try the following suggestion to 
+make the pubspec resolve:
+* Try an upgrade of your constraints: 
+flutter pub upgrade --major-versions
+Failed to update packages.

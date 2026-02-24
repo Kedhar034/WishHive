@@ -21,7 +21,8 @@ class ProductDetailPage extends ConsumerStatefulWidget {
   final String hiveId;
   final String ownerId;
   final String ownerDisplayName;
-  final String? heroTag; // New: Optional tag for correct animation
+  final String? heroTag;
+  final List<String> allowedEditorIds; // Friends who can add wishes to this hive
 
   const ProductDetailPage({
     required this.title,
@@ -30,6 +31,7 @@ class ProductDetailPage extends ConsumerStatefulWidget {
     this.ownerId = '',
     this.ownerDisplayName = '',
     this.heroTag,
+    this.allowedEditorIds = const [],
     super.key,
   });
 
@@ -43,7 +45,27 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     return widget.ownerId.isEmpty || widget.ownerId == uid;
   }
 
+  bool get _canAddWish {
+    final uid = ref.read(uidProvider);
+    if (uid == null) return false;
+    return _isOwner || widget.allowedEditorIds.contains(uid);
+  }
 
+  void _showAddWishSheet() {
+    final uid = ref.read(uidProvider);
+    final user = ref.read(userProvider).value;
+    // When a friend adds a wish to owner's hive, we pass ownerId and addedBy info
+    showMaterialModalBottomSheet(
+      context: context,
+      expand: false,
+      builder: (context) => CreateWishSheet(
+        preselectedHiveId: widget.hiveId,
+        friendHiveOwnerId: _isOwner ? null : widget.ownerId,
+        addedByUid: _isOwner ? null : uid,
+        addedByName: _isOwner ? null : (user?.displayName ?? 'A Friend'),
+      ),
+    );
+  }
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
@@ -169,7 +191,6 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     final wishesAsync = ref.watch(wishesByHiveProvider((hiveId: widget.hiveId, ownerId: targetUid!)));
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundLight,
       body: wishesAsync.when(
         data: (wishes) {
           return CustomScrollView(
@@ -179,20 +200,29 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                 expandedHeight: 240,
                 pinned: true,
                 stretch: true,
-                backgroundColor: AppTheme.surfaceWhite,
-                foregroundColor: AppTheme.textPrimary,
-                title: Text(widget.title),
+                // Keep scaffold bg when collapsed; transparent when expanded (image shows)
+                backgroundColor: theme.scaffoldBackgroundColor,
+                // Always white text/icons since header sits over the dark scrim
+                foregroundColor: Colors.white,
+                title: Text(
+                  widget.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(blurRadius: 6, color: Colors.black54),
+                    ],
+                  ),
+                ),
                 actions: [
                   IconButton(
-                    icon: const Icon(Icons.sort_rounded, size: 28, color: AppTheme.textPrimary),
-                    onPressed: () {
-                      // TODO: Implement menu action
-                    },
+                    icon: const Icon(Icons.sort_rounded, size: 28, color: Colors.white),
+                    onPressed: () {},
                     tooltip: 'Menu',
                   ),
                   if (_isOwner)
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      icon: const Icon(Icons.delete_outline, color: Colors.white),
                       onPressed: _confirmDeleteHive,
                       tooltip: 'Delete Hive',
                     ),
@@ -202,7 +232,31 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                     tag: widget.heroTag ?? 'hive-${widget.hiveId}',
                     child: Material(
                       type: MaterialType.transparency,
-                      child: _buildHeaderImage(),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _buildHeaderImage(),
+                          // Dark scrim at top so back button + title remain readable
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: 110,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.55),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   stretchModes: const [StretchMode.zoomBackground],
@@ -312,6 +366,15 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         ),
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
+      floatingActionButton: _canAddWish
+          ? FloatingActionButton(
+              onPressed: _showAddWishSheet,
+              backgroundColor: AppTheme.primaryAmber,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
@@ -521,10 +584,10 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          side: BorderSide(color: Colors.grey.shade200),
+          side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
           borderRadius: BorderRadius.circular(12),
         ),
         child: InkWell(
@@ -638,7 +701,26 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                             ),
                           ),
                         ),
-                        
+
+                      // Show who added this wish (when it was added by a friend)
+                      if (widget.wish.addedByName.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.person_outline, size: 12, color: Colors.grey[500]),
+                              const SizedBox(width: 3),
+                              Text(
+                                'Added by ${widget.wish.addedByName}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.grey[500],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       // Link Button
                       if (widget.wish.link.isNotEmpty)
                          Padding(

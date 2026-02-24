@@ -1,0 +1,18 @@
+﻿Analyzing 3 items...                                            
+
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\welcome_page.dart:155:29 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\welcome_page.dart:162:48 - use_build_context_synchronously
+
+flutter : 2 issues found. (ran in 6.1s)
+At line:1 char:1
++ flutter analyze 
+lib/services/auth_service.dart 
+lib/pages/login_page.d ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified 
+   : (2 issues found. (ran in 6.1s):Strin  
+  g) [], RemoteException
+    + FullyQualifiedErrorId : NativeComman 
+   dError
+ 

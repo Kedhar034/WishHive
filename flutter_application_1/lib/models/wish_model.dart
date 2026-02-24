@@ -15,6 +15,8 @@ class WishModel {
   final String fulfilledBy;
   final String fulfilledByName;
   final bool ownerSeen; // false when a friend fulfills — triggers notification dot
+  final String addedByUid; // UID of who added this wish (empty = owner added it)
+  final String addedByName; // Display name of who added this wish
 
   WishModel({
     required this.id,
@@ -31,6 +33,8 @@ class WishModel {
     this.fulfilledBy = '',
     this.fulfilledByName = '',
     this.ownerSeen = true,
+    this.addedByUid = '',
+    this.addedByName = '',
   });
 
   factory WishModel.fromFirestore(DocumentSnapshot doc) {
@@ -50,6 +54,8 @@ class WishModel {
       fulfilledBy: data['fulfilledBy'] as String? ?? '',
       fulfilledByName: data['fulfilledByName'] as String? ?? '',
       ownerSeen: data['ownerSeen'] as bool? ?? true,
+      addedByUid: data['addedByUid'] as String? ?? '',
+      addedByName: data['addedByName'] as String? ?? '',
     );
   }
 
@@ -68,6 +74,8 @@ class WishModel {
       'fulfilledBy': fulfilledBy,
       'fulfilledByName': fulfilledByName,
       'ownerSeen': ownerSeen,
+      'addedByUid': addedByUid,
+      'addedByName': addedByName,
     };
   }
 
@@ -86,6 +94,8 @@ class WishModel {
     String? fulfilledBy,
     String? fulfilledByName,
     bool? ownerSeen,
+    String? addedByUid,
+    String? addedByName,
   }) {
     return WishModel(
       id: id ?? this.id,
@@ -102,6 +112,8 @@ class WishModel {
       fulfilledBy: fulfilledBy ?? this.fulfilledBy,
       fulfilledByName: fulfilledByName ?? this.fulfilledByName,
       ownerSeen: ownerSeen ?? this.ownerSeen,
+      addedByUid: addedByUid ?? this.addedByUid,
+      addedByName: addedByName ?? this.addedByName,
     );
   }
 

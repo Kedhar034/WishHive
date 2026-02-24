@@ -341,6 +341,7 @@ class FirestoreService {
         'note': hive.note,
         'privacy': hive.privacy.name,
         'allowedViewerIds': hive.allowedViewerIds,
+        'allowedEditorIds': hive.allowedEditorIds,
       });
     } catch (e) {
       debugPrint('Error updating hive: $e');
@@ -417,6 +418,31 @@ class FirestoreService {
       return docRef.id;
     } catch (e) {
       debugPrint('Error creating wish: $e');
+      rethrow;
+    }
+  }
+
+  /// Add a wish to a friend's hive (when caller has edit-access).
+  /// Writes to [hiveOwnerId]'s wishes sub-collection, not the caller's.
+  Future<String> addWishToFriendsHive(String hiveOwnerId, WishModel wish) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    try {
+      final docRef = _wishesCollection(hiveOwnerId).doc();
+      final wishWithId = wish.copyWith(id: docRef.id);
+      await docRef.set(wishWithId.toFirestore());
+
+      // Update hive aggregates atomically
+      await _hivesCollection(hiveOwnerId).doc(wish.hiveId).update({
+        'itemCount': FieldValue.increment(1),
+        'totalCost': FieldValue.increment(wish.cost),
+      });
+
+      debugPrint('Friend added wish: ${docRef.id} to hive owner: $hiveOwnerId');
+      return docRef.id;
+    } catch (e) {
+      debugPrint('Error adding wish to friends hive: \$e');
       rethrow;
     }
   }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:google_fonts/google_fonts.dart'; // Add Google Fonts import
 import '../providers/providers.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
@@ -12,10 +13,13 @@ import '../services/image_storage_service.dart';
 import '../widgets/image_selection_sheet.dart';
 import '../widgets/avatar_image.dart';
 import 'welcome_page.dart';
+import 'privacy_policy_page.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/locale_provider.dart';
-import '../services/share_logger.dart'; // Import ShareLogger
+import '../providers/theme_provider.dart';
+import '../core/theme/app_theme.dart';
+import '../services/share_logger.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -134,15 +138,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _launchPrivacyPolicy() async {
-    final Uri url = Uri.parse('https://example.com/privacy'); // Placeholder
-    if (!await launchUrl(url)) {
-      if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Privacy Policy')),
-        );
-      }
-    }
+  void _launchPrivacyPolicy() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+    );
   }
 
   void _showChangeUsernameDialog(UserModel user) {
@@ -325,6 +325,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        title.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+          color: Colors.grey[600],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final myUserAsync = ref.watch(currentUserStreamProvider); 
@@ -378,14 +392,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             Text(
                               '@${user.username ?? "Set username"}',
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[600],
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               user.email,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.grey[500],
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -427,7 +441,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   subtitle: Text(_getLanguageName(ref.watch(localeProvider).languageCode)),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  tileColor: Colors.grey[50],
+                  tileColor: theme.colorScheme.surfaceContainerHighest,
                   onTap: () {
                     showDialog(
                       context: context,
@@ -457,10 +471,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 // Privacy Policy
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Privacy Policy'),
-                  trailing: const Icon(Icons.open_in_new, size: 16),
+                  title: Text(AppLocalizations.of(context)!.privacyPolicy),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  tileColor: Colors.grey[50],
+                  tileColor: theme.colorScheme.surfaceContainerHighest,
                   onTap: _launchPrivacyPolicy,
                 ),
                 const SizedBox(height: 8),
@@ -468,11 +482,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 // Share App
                 ListTile(
                   leading: const Icon(Icons.share_outlined),
-                  title: const Text('Share Beehive'),
-                  subtitle: const Text('Invite friends to join'),
+                  title: Text(AppLocalizations.of(context)!.shareApp),
+                  subtitle: Text(AppLocalizations.of(context)!.friends),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  tileColor: Colors.grey[50],
+                  tileColor: theme.colorScheme.surfaceContainerHighest,
                   onTap: _shareApp,
                 ),
 
@@ -492,7 +506,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('View Share Logs'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  tileColor: Colors.grey[50],
+                  tileColor: theme.colorScheme.surfaceContainerHighest,
                   onTap: _showLogs,
                 ),
 
@@ -505,16 +519,70 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     onPressed: _signOut,
                     icon: const Icon(Icons.logout),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[50],
-                      foregroundColor: Colors.red,
+                      backgroundColor: theme.brightness == Brightness.dark
+                          ? Colors.red.withValues(alpha: 0.15)
+                          : Colors.red[50],
+                      foregroundColor: Colors.red[theme.brightness == Brightness.dark ? 300 : 700],
                        elevation: 0,
                     ),
-                    label: const Text('Log Out'),
+                    label: Text(AppLocalizations.of(context)!.logout),
                   ),
                 ),
                 
-                const SizedBox(height: 20),
-                Center(
+                const SizedBox(height: 24),
+            _buildSectionHeader('Appearance'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.brightness_medium_outlined, color: Colors.purple),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text('App Theme',
+                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final current = ref.watch(themeModeProvider);
+                      return Row(
+                        children: [
+                          _themeChip(context, ref, Icons.light_mode_outlined, 'Light', ThemeMode.light, current),
+                          const SizedBox(width: 8),
+                          _themeChip(context, ref, Icons.dark_mode_outlined, 'Dark', ThemeMode.dark, current),
+                          const SizedBox(width: 8),
+                          _themeChip(context, ref, Icons.phone_android, 'System', ThemeMode.system, current),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            _buildSectionHeader('Support'),
+            
+            // Version Info
+            Center(
                   child: Text(
                     'Version 1.0.0',
                     style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
@@ -526,6 +594,48 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error loading profile: $e')),
+      ),
+    );
+  } // end build()
+
+  Widget _themeChip(
+    BuildContext context,
+    WidgetRef ref,
+    IconData icon,
+    String label,
+    ThemeMode mode,
+    ThemeMode current,
+  ) {
+    final isSelected = current == mode;
+    final theme = Theme.of(context);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => ref.read(themeModeProvider.notifier).setTheme(mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryAmber : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryAmber : theme.colorScheme.outline.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 20,
+                  color: isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
       ),
     );
   }

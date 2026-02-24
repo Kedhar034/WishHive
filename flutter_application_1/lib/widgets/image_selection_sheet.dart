@@ -28,6 +28,8 @@ class ImageSelectionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.5,
@@ -36,29 +38,36 @@ class ImageSelectionSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Drag handle
               Center(
                 child: Container(
                   width: 40,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              const Text(
+
+              // Title
+              Text(
                 'Choose Profile Picture',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 20),
+
+              // Camera / Gallery buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -77,11 +86,18 @@ class ImageSelectionSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              const Text(
+
+              // Avatar section label
+              Text(
                 'Or select an avatar',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 12),
+
+              // Avatar grid
               Expanded(
                 child: GridView.builder(
                   controller: scrollController,
@@ -101,10 +117,12 @@ class ImageSelectionSheet extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey[200]!),
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: CircleAvatar(
-                          backgroundColor: Colors.grey[100],
+                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           backgroundImage: AssetImage(avatarPath),
                         ),
                       ),
@@ -121,6 +139,7 @@ class ImageSelectionSheet extends StatelessWidget {
 
   Widget _buildOption(
       BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -128,14 +147,20 @@ class ImageSelectionSheet extends StatelessWidget {
         width: 100,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor.withOpacity(0.1),
+          color: theme.colorScheme.primary.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: Theme.of(context).primaryColor),
+            Icon(icon, size: 32, color: theme.colorScheme.primary),
             const SizedBox(height: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
           ],
         ),
       ),

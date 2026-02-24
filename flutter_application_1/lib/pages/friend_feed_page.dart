@@ -49,6 +49,7 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
           ownerId: hive.ownerId,
           ownerDisplayName: hive.ownerDisplayName,
           heroTag: 'feed-hive-${hive.id}',
+          allowedEditorIds: hive.allowedEditorIds,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(

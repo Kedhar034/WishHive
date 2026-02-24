@@ -6,6 +6,7 @@ import '../providers/providers.dart';
 import '../models/hive_model.dart';
 import '../models/user_model.dart';
 import '../services/image_storage_service.dart';
+import '../widgets/avatar_image.dart';
 
 class HiddenHivesPage extends ConsumerStatefulWidget {
   const HiddenHivesPage({super.key});
@@ -145,13 +146,9 @@ class _HiddenHivesPageState extends ConsumerState<HiddenHivesPage> {
                     child: Column(
                       children: [
                         ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: (ownerProfile.photoUrl?.isNotEmpty ?? false)
-                                ? CachedNetworkImageProvider(ownerProfile.photoUrl!)
-                                : null,
-                            child: (ownerProfile.photoUrl?.isEmpty ?? true)
-                                ? Text(ownerProfile.displayName.characters.first.toUpperCase())
-                                : null,
+                          leading: AvatarImage(
+                            url: ownerProfile.photoUrl,
+                            radius: 20,
                           ),
                           title: Text(hive.title),
                           subtitle: Text('by ${hive.ownerDisplayName}'),

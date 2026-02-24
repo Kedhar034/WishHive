@@ -8,7 +8,8 @@ class HiveModel {
   final String imageUrl;
   final String note;
   final HivePrivacy privacy;
-  final List<String> allowedViewerIds; // For HivePrivacy.specific
+  final List<String> allowedViewerIds; // For HivePrivacy.specific (view only)
+  final List<String> allowedEditorIds; // For HivePrivacy.specific (can add wishes)
   final int itemCount;
   final double totalCost;
   final DateTime? createdAt;
@@ -22,6 +23,7 @@ class HiveModel {
     this.note = '',
     this.privacy = HivePrivacy.private,
     this.allowedViewerIds = const [],
+    this.allowedEditorIds = const [],
     this.itemCount = 0,
     this.totalCost = 0.0,
     this.createdAt,
@@ -38,6 +40,7 @@ class HiveModel {
       note: data['note'] as String? ?? '',
       privacy: _parsePrivacy(data['privacy'] as String?),
       allowedViewerIds: List<String>.from(data['allowedViewerIds'] ?? []),
+      allowedEditorIds: List<String>.from(data['allowedEditorIds'] ?? []),
       itemCount: (data['itemCount'] as num?)?.toInt() ?? 0,
       totalCost: (data['totalCost'] as num?)?.toDouble() ?? 0.0,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
@@ -53,6 +56,7 @@ class HiveModel {
       'note': note,
       'privacy': privacy.name,
       'allowedViewerIds': allowedViewerIds,
+      'allowedEditorIds': allowedEditorIds,
       'id': id,
       'itemCount': itemCount,
       'totalCost': totalCost,
@@ -69,6 +73,7 @@ class HiveModel {
     String? note,
     HivePrivacy? privacy,
     List<String>? allowedViewerIds,
+    List<String>? allowedEditorIds,
     int? itemCount,
     double? totalCost,
     DateTime? createdAt,
@@ -82,6 +87,7 @@ class HiveModel {
       note: note ?? this.note,
       privacy: privacy ?? this.privacy,
       allowedViewerIds: allowedViewerIds ?? this.allowedViewerIds,
+      allowedEditorIds: allowedEditorIds ?? this.allowedEditorIds,
       itemCount: itemCount ?? this.itemCount,
       totalCost: totalCost ?? this.totalCost,
       createdAt: createdAt ?? this.createdAt,

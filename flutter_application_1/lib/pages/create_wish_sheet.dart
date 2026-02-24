@@ -7,6 +7,7 @@ import '../models/wish_model.dart';
 import '../services/firestore_service.dart';
 import '../services/image_storage_service.dart';
 import '../services/affiliate_service.dart';
+import '../services/wish_image_service.dart';
 import '../widgets/image_picker_widget.dart';
 import '../providers/providers.dart';
 import '../core/constants/app_constants.dart';
@@ -17,7 +18,11 @@ class CreateWishSheet extends ConsumerStatefulWidget {
   final String? initialLink;
   final String? initialTitle;
   final String? initialImageUrl;
-  final WishModel? wishToEdit; // If provided, we are in Edit Mode
+  final WishModel? wishToEdit;
+  final String? preselectedHiveId;   // Pre-select hive (used when friend adds wish)
+  final String? friendHiveOwnerId;   // Owner UID when a friend is adding to their hive
+  final String? addedByUid;          // Friend's UID (populated when friendHiveOwnerId is set)
+  final String? addedByName;         // Friend's display name
 
   const CreateWishSheet({
     super.key,
@@ -25,6 +30,10 @@ class CreateWishSheet extends ConsumerStatefulWidget {
     this.initialTitle,
     this.initialImageUrl,
     this.wishToEdit,
+    this.preselectedHiveId,
+    this.friendHiveOwnerId,
+    this.addedByUid,
+    this.addedByName,
   });
 
   @override
@@ -78,7 +87,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
           '${wish.date!.day.toString().padLeft(2, '0')}';
     }
 
-    _selectedHiveId = wish?.hiveId;
+    _selectedHiveId = wish?.hiveId ?? widget.preselectedHiveId;
     
     // Handle image initialization for Edit Mode
     if (wish != null && wish.imageUrl.isNotEmpty) {
@@ -181,6 +190,14 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
         imageUrl = _networkImageUrl!;
       }
 
+      // Auto-image fallback: if still no image, pick a contextual one
+      if (imageUrl.isEmpty) {
+        imageUrl = WishImageService.getAutoImage(
+          _nameController.text.trim(),
+          _urlController.text.trim(),
+        );
+      }
+
       final name = _nameController.text.trim();
       final subtitle = _subtitleController.text.trim();
       final note = _noteController.text.trim();
@@ -231,10 +248,19 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
           note: note,
           link: originalLink,
           cost: cost,
+          addedByUid: widget.addedByUid ?? '',
+          addedByName: widget.addedByName ?? '',
         );
-        // Create generates an ID
-        final newId = await FirestoreService().createWish(wish);
-        
+
+        String newId;
+        if (widget.friendHiveOwnerId != null && widget.friendHiveOwnerId!.isNotEmpty) {
+          // Friend is adding to someone else's hive
+          newId = await FirestoreService().addWishToFriendsHive(widget.friendHiveOwnerId!, wish);
+        } else {
+          // Owner is adding to their own hive
+          newId = await FirestoreService().createWish(wish);
+        }
+
         // If we have a new local image, queue it for upload
         if (_selectedImage != null && !imageUrl.startsWith('http') && !imageUrl.startsWith('assets/')) {
            final uid = FirebaseAuth.instance.currentUser?.uid;

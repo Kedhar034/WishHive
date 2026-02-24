@@ -7,6 +7,7 @@ import '../models/user_model.dart';
 import '../providers/providers.dart';
 import '../widgets/avatar_image.dart';
 import '../core/theme/app_theme.dart';
+import '../l10n/app_localizations.dart';
 
 class ContactsPage extends ConsumerStatefulWidget {
   const ContactsPage({super.key});
@@ -203,12 +204,29 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Friends'),
+        title: Text(AppLocalizations.of(context)!.contacts),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Friends'),
-            Tab(text: 'Requests'),
+          tabs: [
+            Tab(text: AppLocalizations.of(context)!.friends),
+            Tab(
+              child: myUserAsync.when(
+                data: (user) {
+                  final count = user?.friendRequestsReceived.length ?? 0;
+                  return Badge(
+                    isLabelVisible: count > 0,
+                    label: Text('$count'),
+                    backgroundColor: Colors.red,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Text(AppLocalizations.of(context)!.requests),
+                    ),
+                  );
+                },
+                loading: () => Text(AppLocalizations.of(context)!.requests),
+                error: (_, __) => Text(AppLocalizations.of(context)!.requests),
+              ),
+            ),
           ],
         ),
       ),
@@ -243,8 +261,8 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Search friends or contacts',
-              hintText: 'Search by name, username, or email',
+              labelText: AppLocalizations.of(context)!.searchFriends,
+              hintText: AppLocalizations.of(context)!.searchFriends,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
@@ -262,7 +280,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               filled: true,
-              fillColor: Colors.grey[200],
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
             onChanged: (val) {
               _onSearchChanged(val);
@@ -310,7 +328,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
               child: Text(
                 'Your Friends',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.grey[600],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                 ),
