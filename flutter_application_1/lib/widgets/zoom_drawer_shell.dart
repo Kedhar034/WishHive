@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_zoom_drawer/flutter_zoom_drawer.dart';
-import 'menu_page.dart';
+import '../pages/menu_page.dart';
 import '../pages/home_page.dart';
 import '../providers/providers.dart';
 
@@ -21,7 +21,7 @@ class _ZoomDrawerShellState extends ConsumerState<ZoomDrawerShell> {
       controller: _drawerController,
       menuScreen: MenuPage(
         onPageSelected: (index) {
-          ref.read(navigationProvider.notifier).state = index;
+          ref.read(navigationProvider.notifier).setIndex(index);
           _drawerController.close?.call();
         },
       ),

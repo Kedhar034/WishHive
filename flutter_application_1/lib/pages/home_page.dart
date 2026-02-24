@@ -16,6 +16,7 @@ import '../models/hive_model.dart';
 import '../providers/providers.dart';
 import '../widgets/hive_card.dart';
 import '../core/constants/app_constants.dart';
+import '../core/theme/app_theme.dart';
 import 'product_detail_page.dart';
 import 'create_hive_sheet.dart';
 import 'create_wish_sheet.dart';
@@ -539,9 +540,6 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
         ],
       ),
       
-      // ... (Bottom Nav) ...
-        ],
-      ),
     );
   }
 
