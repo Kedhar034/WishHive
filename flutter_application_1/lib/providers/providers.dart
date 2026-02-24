@@ -128,3 +128,7 @@ final unseenWishesByHiveProvider = StreamProvider<Map<String, int>>((ref) {
   if (uid == null) return Stream.value({});
   return ref.watch(firestoreServiceProvider).unseenWishesByHiveStream();
 });
+
+// ─── Navigation Provider ─────────────────────────────────────────────
+
+final navigationProvider = StateProvider<int>((ref) => 0);

@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../core/constants/app_constants.dart';
 import 'welcome_page.dart';
-import 'home_page.dart';
 import 'complete_profile_page.dart';
+import '../widgets/zoom_drawer_shell.dart';
+import '../widgets/circular_logo.dart';
 
 import '../services/update_service.dart';
 
@@ -50,7 +51,7 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
           data: (userModel) {
             // Check if profile is complete (has username)
             if (userModel != null && userModel.username != null && userModel.username!.isNotEmpty) {
-              return const HomePage();
+              return const ZoomDrawerShell();
             }
             
             // If userModel is null or missing username, go to completion
@@ -75,14 +76,9 @@ class _SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      // White in light mode, near-black in dark mode — logo always visible
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
-      body: Center(
-        child: Image.asset(
-          'assets/images/WishHive.png',
-          height: 120,
-          width: 120,
-        ),
+      body: const Center(
+        child: CircularLogo(size: 120, padding: 20),
       ),
     );
   }

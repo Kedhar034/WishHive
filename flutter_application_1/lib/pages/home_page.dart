@@ -1,4 +1,4 @@
-import 'package:curved_navigation_bar/curved_navigation_bar.dart';
+import 'package:flutter_zoom_drawer/flutter_zoom_drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,7 +41,6 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderStateMixin {
   // Optimistic hiding state for friend slider moved to provider
-  int _currentNavIndex = 0;
   late StreamSubscription _intentDataStreamSubscription;
   bool _isHandlingShare = false;
   bool _isInitialLoad = true;
@@ -51,8 +50,6 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   final GlobalKey _fabKey = GlobalKey();
   final GlobalKey _hivesListKey = GlobalKey(); // To be assigned to the Hive List Sliver
   final GlobalKey _hiddenHivesKey = GlobalKey(); // To be assigned to the Hidden Hives Icon
-  final GlobalKey _contactsTabKey = GlobalKey(); // To be assigned to the Contacts Tab
-  final GlobalKey _marketplaceTabKey = GlobalKey(); // To be assigned to the Marketplace Tab
 
   @override
   void initState() {
@@ -82,9 +79,25 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     if (!hasSeenTutorial) {
       // Delay slightly to ensure UI is ready
       Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) _showTutorial();
+        if (mounted) {
+           // 1. Showcase the 3D menu with a "Peek" animation
+           _peekMenu();
+           // 2. Then show the coach marks
+           _showTutorial();
+        }
       });
     }
+  }
+
+  void _peekMenu() {
+    final drawer = ZoomDrawer.of(context);
+    if (drawer == null) return;
+    
+    // Briefly open and then close the menu to showcase the 3D shift
+    drawer.open();
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) drawer.close();
+    });
   }
 
   void _showTutorial() {
@@ -100,14 +113,14 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
         alignSkip: Alignment.topRight,
         contents: [
           TargetContent(
-            align: ContentAlign.top,
+            align: ContentAlign.bottom,
             builder: (context, controller) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Text(
-                    "Create a Hive",
+                    "Navigate the Hive",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -117,7 +130,7 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
                   Padding(
                     padding: EdgeInsets.only(top: 10.0),
                     child: Text(
-                      "Start by creating a new Hive (Wishlist) or a Wish. Tap the + button to get started.",
+                      "We've moved things around! Tap this icon (or swipe from the right) to access your Friends, Marketplace, and Settings.",
                       style: TextStyle(color: Colors.white),
                     ),
                   ),
@@ -166,79 +179,7 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       ),
     );
 
-    // Target 3: Contacts Tab
-    targets.add(
-      TargetFocus(
-        identify: "contacts_tab",
-        keyTarget: _contactsTabKey,
-        alignSkip: Alignment.topRight,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    "Friends & Contacts",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 20.0,
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 10.0),
-                    child: Text(
-                      "Find friends, search contacts, and send friend requests here to grow your Hive network.",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-
-    // Target 4: Marketplace Tab
-    targets.add(
-      TargetFocus(
-        identify: "marketplace_tab",
-        keyTarget: _marketplaceTabKey,
-        alignSkip: Alignment.topRight, 
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    "Marketplace",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 20.0,
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 10.0),
-                    child: Text(
-                      "Discover products and gift ideas coming soon directly within the app!",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
+    // Removed bottom nav targets since they are now in the side menu
 
     tutorialCoachMark = TutorialCoachMark(
       targets: targets,
@@ -477,7 +418,8 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    // ... existing build logic ...
+    final currentNavIndex = ref.watch(navigationProvider);
+
     return Scaffold(
       extendBody: true,
       body: SafeArea(
@@ -503,7 +445,30 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
                     ],
                   ),
                   const Spacer(),
-                  // Hidden Hives Icon with Tutorial Key
+                  // Menu Toggle Icon (Right Side)
+                  GestureDetector(
+                    key: _fabKey, // Temporary key for tutorial until we update it
+                    onTap: () {
+                      ZoomDrawer.of(context)!.toggle();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryAmber,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryAmber.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.menu_open, color: Colors.white, size: 24),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Hidden Hives Icon
                   GestureDetector(
                     key: _hiddenHivesKey,
                     onTap: () {
@@ -536,7 +501,7 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
             // ... (Rest of body) ...
             Expanded(
               child: IndexedStack(
-                index: _currentNavIndex,
+                index: currentNavIndex,
                 children: [
                    _buildHomeContent(ref.watch(hiveListProvider), Theme.of(context)),
                    const ContactsPage(),
@@ -575,58 +540,6 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
       ),
       
       // ... (Bottom Nav) ...
-      bottomNavigationBar: CurvedNavigationBar(
-        index: _currentNavIndex,
-        backgroundColor: Colors.transparent,
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-        buttonBackgroundColor: Theme.of(context).colorScheme.primary,
-        animationDuration: const Duration(milliseconds: 300),
-        onTap: (index) {
-          setState(() => _currentNavIndex = index);
-        },
-        items: [
-          // Badge for unseen fulfilled wishes
-          Consumer(
-            builder: (context, ref, child) {
-              final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
-              
-              if (unseenCount == 0) {
-                return const Icon(Icons.home, size: 28);
-              }
-
-              return Badge(
-                label: Text('$unseenCount'),
-                backgroundColor: Colors.red,
-                textColor: Colors.white,
-                child: const Icon(Icons.home, size: 28),
-              );
-            },
-          ),
-          
-          // Badge for Friend Requests
-          Consumer(
-            builder: (context, ref, child) {
-              final user = ref.watch(currentUserStreamProvider).value;
-              final requestCount = user?.friendRequestsReceived.length ?? 0;
-              
-              if (requestCount == 0) {
-                 return Container(key: _contactsTabKey, child: const Icon(Icons.people, size: 28));
-              }
-
-              return Container(
-                key: _contactsTabKey,
-                child: Badge(
-                  label: Text('$requestCount'),
-                  backgroundColor: Colors.red,
-                  textColor: Colors.white,
-                  child: const Icon(Icons.people, size: 28),
-                ),
-              );
-            },
-          ),
-          
-          Container(key: _marketplaceTabKey, child: const Icon(Icons.shopping_bag_outlined, size: 28)),
-          const Icon(Icons.settings_outlined, size: 28),
         ],
       ),
     );
