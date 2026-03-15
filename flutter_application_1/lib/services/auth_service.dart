@@ -6,7 +6,10 @@ import '../models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb ? '371898205121-7in762okpr7hr6mnp0itkqc4fptd5fce.apps.googleusercontent.com' : null,
+    serverClientId: '371898205121-7in762okpr7hr6mnp0itkqc4fptd5fce.apps.googleusercontent.com',
+  );
   final FirestoreService _firestoreService = FirestoreService();
 
   /// Sign in with Google and update/create user in Firestore.
@@ -30,13 +33,40 @@ class AuthService {
       final User? user = userCredential.user;
 
       if (user != null) {
-        // 5. Update the user in Firestore with their Google info
-        await _firestoreService.updateUser(UserModel(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? 'User',
-          photoUrl: user.photoURL,
-        ));
+        final email = user.email!;
+        
+        // 5. Check if user already exists in Firestore by UID
+        UserModel? existingUser = await _firestoreService.getUser(user.uid);
+        
+        // 6. AD-HOC DATA INHERITANCE: If UID match fails, check if an account exists with the same email
+        if (existingUser == null) {
+          final results = await _firestoreService.searchUsers(email);
+          if (results.isNotEmpty) {
+             // We found an account with the same email.
+             // Inherit their existing profile data to ensure consistency.
+             final inherited = results.first;
+             existingUser = inherited;
+             
+             // Create/Update the new Google UID record with inherited data
+             await _firestoreService.updateUser(UserModel(
+               uid: user.uid,
+               email: email,
+               username: inherited.username,
+               displayName: inherited.displayName,
+               photoUrl: inherited.photoUrl, // Keep existing pic!
+             ));
+          }
+        }
+        
+        if (existingUser == null) {
+          // Truly New user: Create with Google info
+          await _firestoreService.updateUser(UserModel(
+            uid: user.uid,
+            email: email,
+            displayName: user.displayName ?? 'User',
+            photoUrl: user.photoURL,
+          ));
+        }
       }
 
       return user;
