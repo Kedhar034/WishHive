@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account - WishHive</title>
+    <link rel="icon" type="image/png" href="images/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #f9f9f9;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: #FFC107;
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        header img { width: 40px; height: 40px; border-radius: 10px; }
+        header h1 { font-size: 1.4rem; font-weight: 700; color: #222; }
+        .container {
+            max-width: 700px;
+            margin: 60px auto;
+            padding: 40px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+        h2 { font-size: 1.8rem; font-weight: 700; color: #222; margin-bottom: 16px; }
+        p { color: #555; line-height: 1.8; margin-bottom: 16px; }
+        .warning-box {
+            background: #FFF8E1;
+            border-left: 4px solid #FFC107;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 24px 0;
+        }
+        .warning-box p { color: #7a5c00; margin: 0; }
+        ol { padding-left: 20px; color: #555; line-height: 2; margin-bottom: 24px; }
+        .data-list { 
+            background: #f5f5f5; 
+            border-radius: 10px; 
+            padding: 16px 24px; 
+            margin-bottom: 24px; 
+        }
+        .data-list li { color: #555; line-height: 2; }
+        .cta-btn {
+            display: inline-block;
+            background: #FFC107;
+            color: #222;
+            padding: 14px 32px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .cta-btn:hover { background: #FFB300; }
+        footer {
+            text-align: center;
+            padding: 24px;
+            color: #999;
+            font-size: 0.85rem;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🐝 WishHive</h1>
+    </header>
+
+    <div class="container">
+        <h2>Delete Your Account</h2>
+        <p>We're sorry to see you go. If you'd like to permanently delete your WishHive account and all associated data, please follow the steps below.</p>
+
+        <div class="warning-box">
+            <p>⚠️ <strong>Warning:</strong> Account deletion is permanent and cannot be undone. All your data will be erased.</p>
+        </div>
+
+        <h3 style="margin-bottom:12px; color:#222;">What will be deleted:</h3>
+        <ul class="data-list">
+            <li>Your profile information (name, photo, username)</li>
+            <li>All Hives you have created</li>
+            <li>All wishes and items you have added</li>
+            <li>Your friends list and connections</li>
+            <li>All account activity and history</li>
+        </ul>
+
+        <h3 style="margin-bottom:12px; color:#222;">How to request deletion:</h3>
+        <ol>
+            <li>Send an email to our support team at <strong>wishhive@outlook.com</strong></li>
+            <li>Use the subject: <strong>"Account Deletion Request"</strong></li>
+            <li>Include the email address registered with your WishHive account</li>
+            <li>Our team will process your request within <strong>7 business days</strong></li>
+        </ol>
+
+        <p>Your data will be fully deleted from our servers within <strong>30 days</strong> of your request being processed.</p>
+
+        <a class="cta-btn" href="mailto:wishhive@outlook.com?subject=Account%20Deletion%20Request">
+            📧 Email Us to Delete Account
+        </a>
+    </div>
+
+    <footer>
+        &copy; 2025 WishHive. All rights reserved. |
+        <a href="privacy.html" style="color:#FFC107; text-decoration:none;">Privacy Policy</a>
+    </footer>
+</body>
+</html>
