@@ -42,14 +42,17 @@ class MetadataService {
   /// Returns a [LinkMetadata] object if successful, or null if it fails.
   static Future<LinkMetadata?> extract(String url) async {
     try {
-      // Browser-like User-Agent to avoid being blocked (e.g. by Amazon)
+      // A desktop User-Agent, deliberately. Amazon answers a mobile one with
+      // a stripped page that has no og tags, no #productTitle and no
+      // schema.org block, so a shared link came back named after the site.
       final response = await http.get(
         Uri.parse(url),
         headers: {
           'User-Agent':
-              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Language': 'en-IN,en;q=0.9',
         },
       );
 
@@ -90,6 +93,7 @@ class MetadataService {
 
     String title = _cleanTitle(
       _stringOf(product?['name']) ??
+          _retailerTitle(document) ??
           data?.title ??
           _metaTitle(html) ??
           data?.url ??
@@ -107,18 +111,29 @@ class MetadataService {
     for (final img in _imageList(product?['image'])) {
       addImage(img);
     }
-    addImage(data?.image);
+    // Before the generic fallbacks: Amazon keeps its gallery in an attribute,
+    // and the generic pass would otherwise settle for the first <img> on the
+    // page, which is a thumbnail or a banner.
+    for (final img in _amazonImages(document)) {
+      addImage(img);
+    }
     for (final img in _metaImages(html)) {
       addImage(img);
     }
+    addImage(data?.image);
 
     final offer = _firstOffer(product);
     final rating = _asMap(product?['aggregateRating']);
 
+    // Only the best image is kept. Extra images came from whatever else the
+    // page happened to carry — related products, banners — which is what made
+    // a wish show a picture of something it was not.
+    final best = images.isEmpty ? <String>[] : [images.first];
+
     return LinkMetadata(
       title: title.trim(),
-      imageUrl: images.isNotEmpty ? images.first : null,
-      images: images,
+      imageUrl: best.isEmpty ? null : best.first,
+      images: best,
       url: url,
       description: _stringOf(product?['description']) ?? data?.description,
       price: _parseNumber(offer?['price'] ?? offer?['lowPrice']),
@@ -128,6 +143,56 @@ class MetadataService {
           _parseNumber(rating?['reviewCount'] ?? rating?['ratingCount'])?.round(),
       brand: _brandName(product?['brand']),
     );
+  }
+
+  /// Product titles from retailers that publish no usable metadata.
+  static String? _retailerTitle(dom.Document document) {
+    for (final selector in const [
+      '#productTitle', // Amazon
+      '#title span',
+      'h1.pdp-title',  // Myntra
+      'h1.pdp-name',
+      'span.B_NuCI',   // Flipkart
+      'h1[itemprop="name"]',
+    ]) {
+      final text = document.querySelector(selector)?.text.trim();
+      if (text != null && text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  /// Amazon keeps its gallery in a data-a-dynamic-image attribute, whose value
+  /// is a JSON map of url to [width, height]. The widest is the one worth
+  /// keeping.
+  static Iterable<String> _amazonImages(dom.Document document) sync* {
+    for (final selector in const ['#landingImage', '[data-a-dynamic-image]']) {
+      final raw = document
+          .querySelector(selector)
+          ?.attributes['data-a-dynamic-image'];
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) continue;
+
+        var bestUrl = '';
+        var bestWidth = -1;
+        decoded.forEach((key, value) {
+          final width = (value is List && value.isNotEmpty && value.first is num)
+              ? (value.first as num).toInt()
+              : 0;
+          if (width > bestWidth) {
+            bestWidth = width;
+            bestUrl = key.toString();
+          }
+        });
+        if (bestUrl.isNotEmpty) yield bestUrl;
+      } catch (_) {
+        // Malformed attribute: fall through to whatever else was found.
+      }
+    }
+
+    final src = document.querySelector('#landingImage')?.attributes['src'];
+    if (src != null && src.isNotEmpty) yield src;
   }
 
   // ─── schema.org/Product ───────────────────────────────────────────────────

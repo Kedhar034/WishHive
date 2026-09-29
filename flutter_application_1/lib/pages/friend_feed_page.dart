@@ -4,13 +4,15 @@ import '../providers/providers.dart';
 import '../models/hive_model.dart';
 import '../models/user_model.dart';
 import '../widgets/hive_card.dart';
+import '../widgets/hive_title.dart';
+import '../core/theme/app_theme.dart';
 import '../widgets/skeleton_hive_card.dart';
 import '../widgets/app_refresh.dart';
 import '../services/firestore_service.dart';
-import '../widgets/avatar_image.dart';
 import '../core/constants/app_constants.dart';
 import 'product_detail_page.dart';
 import 'hidden_hives_page.dart';
+import 'contacts_page.dart';
 
 class FriendFeedPage extends ConsumerStatefulWidget {
   const FriendFeedPage({super.key});
@@ -44,6 +46,7 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
           ownerDisplayName: hive.ownerDisplayName,
           heroTag: 'feed-hive-${hive.id}',
           allowedEditorIds: hive.allowedEditorIds,
+          cardColor: hive.cardColor,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -125,142 +128,203 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Friend Feed'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.visibility_off_outlined, color: Colors.black87),
-            tooltip: 'Hidden Hives',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const HiddenHivesPage()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: myUserAsync.when(
-        data: (myUser) {
-          if (myUser == null) return const Center(child: Text('User not signed in'));
-          
-          // No early return on an empty friends list — a hive reached through a
-          // share link belongs here even when the two aren't friends.
-          return ref.watch(friendFeedProvider).when(
-            loading: () => ListView.separated(
-              padding: const EdgeInsets.only(bottom: 100),
-              itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (_, __) => const SkeletonHiveCard(),
-            ),
-            error: (e, _) => Center(child: Text('Error: $e')),
-            data: (allHives) {
-              // Filter out optimistically hidden hives
-              final hives = allHives.where((h) => !_temporarilyHidden.contains(h.id)).toList();
+      body: SafeArea(
+        bottom: false,
+        child: myUserAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Error: $e')),
+          data: (myUser) {
+            if (myUser == null) {
+              return const Center(child: Text('User not signed in'));
+            }
 
-              if (hives.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.people_outline,
-                            size: 72, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('Nothing here yet',
-                            style: theme.textTheme.titleLarge
-                                ?.copyWith(color: Colors.grey)),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Add friends from Contacts, or open a hive someone '
-                          'shared with you.',
-                          textAlign: TextAlign.center,
+            // No early return on an empty friends list — a hive reached
+            // through a share link belongs here even when the two are not
+            // friends.
+            return ref.watch(friendFeedProvider).when(
+              loading: () => ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 90, 16, 100),
+                itemCount: 5,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (_, __) => const SkeletonHiveCard(),
+              ),
+              error: (e, _) => Center(child: Text('Error: $e')),
+              data: (allHives) {
+                final hives = allHives
+                    .where((h) => !_temporarilyHidden.contains(h.id))
+                    .toList();
+
+                return AppRefresh(
+                  onRefresh: () async {
+                    FirestoreService.clearProfileCache();
+                    ref.invalidate(friendFeedProvider);
+                    await ref.read(friendFeedProvider.future);
+                  },
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (Navigator.of(context).canPop())
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4, top: 4),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.arrow_back),
+                                    tooltip: 'Back',
+                                    onPressed: () => Navigator.of(context).maybePop(),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      myUser.friends.isEmpty
+                                          ? 'Shared with you'
+                                          : 'From ${myUser.friends.length} '
+                                              '${myUser.friends.length == 1 ? 'friend' : 'friends'}',
+                                      style: const TextStyle(
+                                          fontFamily: AppTheme.fontFamily,
+                                          fontSize: 15,
+                                          color: AppTheme.muted),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    const HiveTitle("Friends' hives", size: 40),
+                                  ],
+                                ),
+                              ),
+                              // Search for someone and add them; hiding
+                              // lives behind the eye.
+                              IconButton(
+                                icon: const Icon(Icons.person_add_alt_1_outlined),
+                                tooltip: 'Add a friend',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.surface,
+                                  padding: const EdgeInsets.all(12),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => const ContactsPage()),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.visibility_off_outlined),
+                                tooltip: 'Hidden hives',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.surface,
+                                  padding: const EdgeInsets.all(12),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => const HiddenHivesPage()),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return AppRefresh(
-                onRefresh: () async {
-                  FirestoreService.clearProfileCache();
-                  ref.invalidate(friendFeedProvider);
-                  await ref.read(friendFeedProvider.future);
-                },
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  itemCount: hives.length,
-                  itemBuilder: (context, index) {
-                    final hive = hives[index];
-                    // Find owner profile for display
-                    final ownerProfile = myUser.friends.firstWhere(
-                      (f) => f.uid == hive.ownerId,
-                      orElse: () => FriendProfile(uid: '', displayName: 'Unknown', email: ''),
-                    );
-
-                    return GestureDetector(
-                      onTap: () => _openHiveDetail(hive),
-                      onLongPress: () => _showHideHiveDialog(hive),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Owner Header
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                            child: Row(
+                      ),
+                      if (hives.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                AvatarImage(
-                                  url: ownerProfile.photoUrl,
-                                  radius: 16,
-                                ),
-                                const SizedBox(width: 8),
+                                Icon(Icons.people_outline,
+                                    size: 64,
+                                    color: AppTheme.muted.withValues(alpha: 0.5)),
+                                const SizedBox(height: 16),
+                                Text('Nothing here yet',
+                                    style: theme.textTheme.titleLarge),
+                                const SizedBox(height: 8),
                                 Text(
-                                  ownerProfile.displayName,
-                                  style: theme.textTheme.labelLarge,
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _formatDate(hive.createdAt),
-                                  style: theme.textTheme.bodySmall,
+                                  'Add friends from Contacts, or open a hive '
+                                  'someone shared with you.',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium,
                                 ),
                               ],
                             ),
                           ),
-                          // Hive Card
-                          HiveCard(
-                            heroTag: 'feed-hive-${hive.id}',
-                            title: hive.title,
-                            items: hive.itemCount,
-                            price: hive.totalCost,
-                            imageUrl: hive.imageUrl.isNotEmpty
-                                ? hive.imageUrl
-                                : AppConstants.fallbackImage,
+                        )
+                      else
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 14,
+                              crossAxisSpacing: 14,
+                              mainAxisExtent: 188,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final hive = hives[index];
+                                final ownerProfile = myUser.friends.firstWhere(
+                                  (f) => f.uid == hive.ownerId,
+                                  orElse: () => FriendProfile(
+                                      uid: '',
+                                      displayName: hive.ownerDisplayName,
+                                      email: ''),
+                                );
+
+                                return GestureDetector(
+                                  onTap: () => _openHiveDetail(hive),
+                                  onLongPress: () => _showHideHiveDialog(hive),
+                                  child: HiveCard(
+                                    heroTag: 'feed-hive-${hive.id}',
+                                    title: hive.title,
+                                    items: hive.itemCount,
+                                    price: hive.totalCost,
+                                    imageUrl: hive.imageUrl.isNotEmpty
+                                        ? hive.imageUrl
+                                        : AppConstants.fallbackImage,
+                                    ownerName: ownerProfile.displayName,
+                                    dateLabel: _formatDate(hive.createdAt),
+                                    tintSeed: hive.id,
+                                    isCompact: true,
+                                  ),
+                                );
+                              },
+                              childCount: hives.length,
+                            ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
+  /// Short enough for the chip on a grid card, which is about six characters
+  /// wide before it starts to ellipsise.
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
-    return 'Just now';
+    final diff = DateTime.now().difference(date);
+    if (diff.inDays >= 365) return '${diff.inDays ~/ 365}y';
+    if (diff.inDays >= 30) return '${diff.inDays ~/ 30}mo';
+    if (diff.inDays > 0) return '${diff.inDays}d';
+    if (diff.inHours > 0) return '${diff.inHours}h';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m';
+    return 'New';
   }
 }

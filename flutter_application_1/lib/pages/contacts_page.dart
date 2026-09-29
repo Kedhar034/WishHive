@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/hive_title.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -280,7 +281,15 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.contacts),
+        // As a tab the shared header names this screen, so the bar collapses
+        // to nothing. Pushed from Friends' hives there is no shared header,
+        // so it has to carry its own title and back button.
+        toolbarHeight: Navigator.of(context).canPop() ? kToolbarHeight : 0,
+        automaticallyImplyLeading: Navigator.of(context).canPop(),
+        title: Navigator.of(context).canPop()
+            ? const HiveTitle('Your friends', size: 26)
+            : null,
+        centerTitle: false,
         bottom: TabBar(
           controller: _tabController,
           tabs: [
@@ -540,7 +549,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryAmber.withValues(alpha: 0.15),
+                      color: AppTheme.brandBlue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -548,7 +557,7 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryAmber,
+                        color: AppTheme.brandBlue,
                       ),
                     ),
                   ),
@@ -564,11 +573,11 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
                 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppTheme.primaryAmber.withValues(alpha: 0.15),
+                    backgroundColor: AppTheme.brandBlue.withValues(alpha: 0.15),
                     child: Text(
                       contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?',
                       style: TextStyle(
-                        color: AppTheme.primaryAmber,
+                        color: AppTheme.brandBlue,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -580,8 +589,8 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
                     icon: const Icon(Icons.send, size: 16),
                     label: const Text('Invite'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primaryAmber,
-                      side: BorderSide(color: AppTheme.primaryAmber.withValues(alpha: 0.5)),
+                      foregroundColor: AppTheme.brandBlue,
+                      side: BorderSide(color: AppTheme.brandBlue.withValues(alpha: 0.5)),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

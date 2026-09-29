@@ -41,7 +41,7 @@ class WelcomePage extends StatelessWidget {
     final media = MediaQuery.of(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundLight,
+      backgroundColor: AppTheme.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -114,7 +114,7 @@ class WelcomePage extends StatelessWidget {
                               fontSize: 34,
                               height: 1.1,
                               letterSpacing: -1.2,
-                              color: AppTheme.textPrimary,
+                              color: AppTheme.ink,
                             ),
                           ),
                         ),
@@ -131,7 +131,7 @@ class WelcomePage extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w400,
                       height: 1.4,
-                      color: AppTheme.textSecondary,
+                      color: AppTheme.muted,
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -140,7 +140,7 @@ class WelcomePage extends StatelessWidget {
                     text: 'Sign in with Google',
                     leading: const _GoogleMark(),
                     onTap: () => _signInWithGoogle(context),
-                    backgroundColor: AppTheme.primaryAmber,
+                    backgroundColor: AppTheme.brandBlue,
                     textColor: Colors.white,
                   ),
                   const SizedBox(height: 10),
@@ -148,15 +148,15 @@ class WelcomePage extends StatelessWidget {
                   _AuthButton(
                     text: 'Login with Email',
                     leading: const Icon(Icons.mail_outline_rounded,
-                        size: 19, color: AppTheme.textPrimary),
+                        size: 19, color: AppTheme.ink),
                     onTap: () {
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => const LoginPage()));
                     },
                     backgroundColor: Colors.transparent,
-                    textColor: AppTheme.textPrimary,
+                    textColor: AppTheme.ink,
                     isOutlined: true,
-                    borderColor: AppTheme.textPrimary.withValues(alpha: 0.16),
+                    borderColor: AppTheme.ink.withValues(alpha: 0.16),
                   ),
                   const SizedBox(height: 14),
 
@@ -174,7 +174,7 @@ class WelcomePage extends StatelessWidget {
                             text: 'Sign Up',
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
+                              color: AppTheme.ink,
                             ),
                           ),
                         ],
@@ -183,7 +183,7 @@ class WelcomePage extends StatelessWidget {
                         fontFamily: 'Figtree',
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
-                        color: AppTheme.textSecondary,
+                        color: AppTheme.muted,
                       ),
                     ),
                   ),
@@ -255,7 +255,7 @@ class _GoogleMark extends StatelessWidget {
           fontSize: 14,
           height: 1.0,
           fontWeight: FontWeight.w600,
-          color: AppTheme.primaryAmber,
+          color: AppTheme.brandBlue,
         ),
       ),
     );
@@ -292,12 +292,12 @@ class _AuthButton extends StatelessWidget {
           backgroundColor: backgroundColor,
           foregroundColor: textColor,
           overlayColor: isOutlined
-              ? AppTheme.primaryAmber.withValues(alpha: 0.1)
+              ? AppTheme.brandBlue.withValues(alpha: 0.1)
               : Colors.white.withValues(alpha: 0.2),
           splashFactory: InkRipple.splashFactory,
           elevation: isOutlined ? 0 : 2,
           shadowColor:
-              isOutlined ? null : AppTheme.primaryAmber.withValues(alpha: 0.35),
+              isOutlined ? null : AppTheme.brandBlue.withValues(alpha: 0.35),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(25),
             side: isOutlined

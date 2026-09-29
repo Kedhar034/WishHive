@@ -36,7 +36,7 @@ class AppRefresh extends StatelessWidget {
       },
       displacement: displacement,
       strokeWidth: 2.6,
-      color: AppTheme.primaryAmber,
+      color: AppTheme.brandBlue,
       backgroundColor: theme.cardColor,
       child: child,
     );

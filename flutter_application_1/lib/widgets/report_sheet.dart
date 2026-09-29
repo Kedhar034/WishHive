@@ -141,7 +141,7 @@ class _ReportSheetState extends ConsumerState<ReportSheet> {
                         ? Icons.radio_button_checked
                         : Icons.radio_button_unchecked,
                     color: selected
-                        ? AppTheme.primaryAmber
+                        ? AppTheme.brandBlue
                         : theme.colorScheme.outline,
                     size: 22,
                   ),

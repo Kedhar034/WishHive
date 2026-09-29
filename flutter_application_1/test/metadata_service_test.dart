@@ -39,7 +39,7 @@ void main() {
       expect(m.hasPrice, isTrue);
     });
 
-    test('collects the full image list, first one as primary', () {
+    test('keeps only the first image of a gallery', () {
       final m = parse(ldJson('''
         {
           "@type": "Product",
@@ -52,7 +52,7 @@ void main() {
         }
       '''));
 
-      expect(m.images.length, 3);
+      expect(m.images, ['https://cdn.example.com/1.jpg']);
       expect(m.imageUrl, 'https://cdn.example.com/1.jpg');
     });
 
@@ -194,7 +194,7 @@ void main() {
   });
 
   group('image list', () {
-    test('deduplicates across JSON-LD and meta tags', () {
+    test('prefers the JSON-LD image over the meta tags', () {
       final m = parse('''
         <html><head>
           <script type="application/ld+json">
@@ -205,7 +205,7 @@ void main() {
           <meta property="twitter:image" content="https://cdn.example.com/b.jpg">
         </head><body></body></html>
       ''');
-      expect(m.images, ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg']);
+      expect(m.images, ['https://cdn.example.com/a.jpg']);
     });
 
     test('imageUrl always matches the first entry', () {

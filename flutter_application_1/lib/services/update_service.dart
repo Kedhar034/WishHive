@@ -2,10 +2,16 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../core/theme/app_theme.dart';
+import '../widgets/circular_logo.dart';
+import '../widgets/hive_title.dart';
 
 enum UpdateStatus { noUpdate, softUpdate, forceUpdate }
 
 class UpdateService {
+  static const String _storeUrl =
+      'https://play.google.com/store/apps/details?id=com.wishhive.app';
+
   static final FirebaseRemoteConfig _remoteConfig = FirebaseRemoteConfig.instance;
 
   static Future<void> initialize() async {
@@ -66,99 +72,64 @@ class UpdateService {
       barrierDismissible: !force,
       builder: (context) {
         final theme = Theme.of(context);
+
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.rHive)),
           elevation: 0,
           backgroundColor: theme.colorScheme.surface,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Brand Illustration
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+                const Center(child: CircularLogo(size: 64, showShadow: false)),
+                const SizedBox(height: 20),
+
+                Center(
+                  child: HiveTitle(
+                    force ? 'Update required' : 'Update available',
+                    size: 28,
+                    align: TextAlign.center,
                   ),
-                  child: Image.asset(
-                    'assets/images/logo_amber.png',
-                    width: 64,
-                    height: 64,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.update_rounded,
-                      size: 64,
-                      color: Colors.amber,
-                    ),
-                  ),
+                ),
+                const SizedBox(height: 10),
+
+                Text(
+                  force
+                      ? 'This version is no longer supported. Update to keep '
+                          'using WishHive.'
+                      : 'A newer version is ready, with the latest fixes and '
+                          'improvements.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
                 ),
                 const SizedBox(height: 24),
-                // Title
-                Text(
-                  force ? 'New Beehive Awaits!' : 'Better Version Ready',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                // Friendly Reason
-                Text(
-                  force 
-                      ? 'To keep your experience sweet and secure, we\'ve released a critical update. Please update the app to continue your journey!'
-                      : 'We\'ve added some new buzz! Update now to enjoy the latest features, improvements, and bug fixes.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                // Primary Action
+
                 SizedBox(
-                  width: double.infinity,
-                  height: 56,
+                  height: 52,
                   child: ElevatedButton(
                     onPressed: () async {
-                      const url = 'https://play.google.com/store/apps/details?id=com.wishhive.app';
-                      final uri = Uri.parse(url);
+                      final uri = Uri.parse(_storeUrl);
                       if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        await launchUrl(uri,
+                            mode: LaunchMode.externalApplication);
                       }
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text(
-                      'Update Now',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: const Text('Update now'),
                   ),
                 ),
-                // Secondary Action (only for non-force)
-                if (!force) ...[
-                  const SizedBox(height: 8),
+
+                // A forced update has no way out, by design: the dialog is the
+                // only thing standing between an unsupported client and data
+                // it can no longer read correctly.
+                if (!force)
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'Maybe Later',
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: const Text('Not now'),
                   ),
-                ],
               ],
             ),
           ),

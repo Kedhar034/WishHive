@@ -409,7 +409,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
             ),
             child: Row(
               children: [
-                Icon(Icons.hive, color: AppTheme.primaryAmber),
+                Icon(Icons.hive, color: AppTheme.brandBlue),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

@@ -15,6 +15,9 @@ import '../providers/providers.dart';
 import '../services/share_link_service.dart';
 import '../services/share_link_flow.dart';
 import '../widgets/hive_card.dart';
+import '../widgets/hive_open_route.dart';
+import '../widgets/hive_stack.dart';
+import '../widgets/hive_title.dart';
 import '../widgets/app_refresh.dart';
 import '../services/firestore_service.dart';
 import '../core/constants/app_constants.dart';
@@ -24,6 +27,7 @@ import 'create_hive_sheet.dart';
 import 'create_wish_sheet.dart';
 import 'contacts_page.dart';
 import 'hidden_hives_page.dart';
+import 'friend_feed_page.dart';
 import 'marketplace_page.dart';
 import 'settings_page.dart';
 import 'menu_page.dart';
@@ -291,6 +295,53 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     return media.size.width * _drawerDragFraction + media.padding.left;
   }
 
+  /// The dashboard shows the logo and wordmark. The other tabs name
+  /// themselves instead, so the brand is not repeated on every screen.
+  Widget _headerTitle(int navIndex) {
+    if (navIndex == 0) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularLogo(size: 40, showShadow: false),
+          const SizedBox(width: 12),
+          // Scaled down rather than ellipsised: the app name is the one piece
+          // of text that must never read as "Wish...", and a narrow screen or
+          // a large system font size would otherwise clip it.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                AppConstants.appName,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 28,
+                  // Real Figtree Bold, now that the 700 weight is bundled;
+                  // before this it fell back to SemiBold.
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.8,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    const names = {1: 'Your friends', 2: 'Explore', 3: 'Your profile'};
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: HiveTitle(names[navIndex] ?? AppConstants.appName, size: 32),
+      ),
+    );
+  }
+
   Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
     // Show skeletons during initial load for smooth transition from login
     if (_isInitialLoad) {
@@ -316,161 +367,180 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     final notificationCounts = notificationCountsAsync.value ?? {};
     final temporarilyHidden = ref.watch(temporarilyHiddenHivesProvider);
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        // 1. Friend Hives Section (Horizontal Slider)
+    // The deck is the only thing that scrolls on this screen. Nesting it in an
+    // outer scroll view meant a drag on the cards moved the deck while the
+    // page stayed put, which let the friends row get stranded half off screen.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         friendHivesAsync.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
           data: (allHives) {
-            final hives = allHives.where((h) => !temporarilyHidden.contains(h.id)).toList();
-            if (hives.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-            return SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
-                    child: Text(
-                      'From Your Friends',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+            final hives = allHives
+                .where((h) => !temporarilyHidden.contains(h.id))
+                .toList();
+            if (hives.isEmpty) return const SizedBox.shrink();
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 12, 10),
+                  child: Row(
+                    children: [
+                      Text('From friends', style: theme.textTheme.titleMedium),
+                      const Spacer(),
+                      // The same hives laid out vertically, for anyone who
+                      // would rather browse than swipe sideways.
+                      TextButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const FriendFeedPage()),
+                        ),
+                        child: const Text('See all'),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 176,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: hives.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final hive = hives[index];
+                      return SizedBox(
+                        width: 215,
+                        child: GestureDetector(
+                          onTap: () => _openHiveDetail(hive,
+                              heroTag: 'friend-hive-${hive.id}'),
+                          onLongPress: () => _showHideHiveDialog(hive),
+                          child: HiveCard(
+                            heroTag: 'friend-hive-${hive.id}',
+                            title: hive.title,
+                            items: hive.itemCount,
+                            price: hive.totalCost,
+                            imageUrl: hive.imageUrl.isNotEmpty
+                                ? hive.imageUrl
+                                : AppConstants.fallbackImage,
+                            ownerName: hive.ownerDisplayName,
+                            tintSeed: hive.id,
+                            colorKey: hive.cardColor,
+                            isCompact: true,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+
+        Expanded(
+          child: hiveList.when(
+            loading: () => ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              itemCount: 4,
+              itemBuilder: (context, index) => const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: _HiveCardSkeleton(),
+              ),
+            ),
+            error: (e, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Error loading hives: $e',
+                    textAlign: TextAlign.center),
+              ),
+            ),
+            data: (snapshot) {
+              final hiveDocs = snapshot.docs;
+
+              if (hiveDocs.isEmpty) {
+                return ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    const SizedBox(height: 12),
+                    const HiveTitle('Your hives', size: 38),
+                    const SizedBox(height: 60),
+                    Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.hive_outlined,
+                              size: 72,
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.3)),
+                          const SizedBox(height: 16),
+                          Text('No hives yet',
+                              style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          Text('Tap + to create your first hive!',
+                              style: theme.textTheme.bodyMedium),
+                        ],
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    height: 220, // Height for the horizontal cards
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: hives.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final hive = hives[index];
-                        return SizedBox(
-                          width: 160, // Fixed width for horizontal items
-                          child: GestureDetector(
-                            onTap: () => _openHiveDetail(hive, heroTag: 'friend-hive-${hive.id}'),
-                            onLongPress: () => _showHideHiveDialog(hive),
+                  ],
+                );
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 10, 0, 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const HiveTitle('Your hives', size: 38),
+                          const SizedBox(width: 10),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 7),
+                            child: Text('${hiveDocs.length}',
+                                style: theme.textTheme.bodyMedium),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: HiveDeck(
+                        itemCount: hiveDocs.length,
+                        builder: (context, index, collapse) {
+                          final hive = HiveModel.fromFirestore(hiveDocs[index]);
+                          final notifCount = notificationCounts[hive.id] ?? 0;
+
+                          return GestureDetector(
+                            onTap: () =>
+                                _openHiveDetail(hive, heroTag: 'hive-${hive.id}'),
+                            onLongPress: () => _editHive(hive),
                             child: HiveCard(
-                              heroTag: 'friend-hive-${hive.id}',
+                              heroTag: 'hive-${hive.id}',
                               title: hive.title,
                               items: hive.itemCount,
                               price: hive.totalCost,
                               imageUrl: hive.imageUrl.isNotEmpty
                                   ? hive.imageUrl
                                   : AppConstants.fallbackImage,
-                              ownerName: hive.ownerDisplayName,
-                              isCompact: true, // Use compact mode for slider
+                              notificationCount: notifCount,
+                              tintSeed: hive.id,
+                              colorKey: hive.cardColor,
+                              collapse: collapse,
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      'My Hives',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                          );
+                        },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            );
-          },
-          loading: () => const _FriendFeedSkeleton(),
-          error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-        ),
-
-        // 2. My Hives Grid (Vertical)
-        hiveList.when(
-          data: (snapshot) {
-            final hiveDocs = snapshot.docs;
-            if (hiveDocs.isEmpty) {
-              return SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.hive_outlined,
-                        size: 80,
-                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No hives yet',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap + to create your first hive!',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               );
-            }
-
-            return SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final doc = hiveDocs[index];
-                    final hive = HiveModel.fromFirestore(doc);
-                    final notifCount = notificationCounts[hive.id] ?? 0;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: GestureDetector(
-                        onTap: () => _openHiveDetail(hive, heroTag: 'hive-${hive.id}'),
-                        onLongPress: () => _editHive(hive),
-                        child: HiveCard(
-                          heroTag: 'hive-${hive.id}',
-                          title: hive.title,
-                          items: hive.itemCount,
-                          price: hive.totalCost,
-                          imageUrl: hive.imageUrl.isNotEmpty
-                              ? hive.imageUrl
-                              : AppConstants.fallbackImage,
-                          notificationCount: notifCount,
-                        ),
-                      ),
-                    );
-                  },
-                  childCount: hiveDocs.length,
-                ),
-              ),
-            );
-          },
-          loading: () => SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                return const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
-                  child: _HiveCardSkeleton(),
-                );
-              },
-              childCount: 4,
-            ),
-          ),
-          error: (e, _) => SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Text('Error loading hives: $e', textAlign: TextAlign.center),
-              ),
-            ),
+            },
           ),
         ),
       ],
@@ -501,25 +571,15 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
               child: Row(
                 children: [
-                  // App Name and Logo (Left Side) - Now redirects to Home
-                  GestureDetector(
-                    onTap: () {
-                      ref.read(navigationProvider.notifier).setIndex(0);
-                    },
-                    child: Row(
-                      children: [
-                        const CircularLogo(size: 40, showShadow: false),
-                        const SizedBox(width: 12),
-                        Text(
-                          AppConstants.appName,
-                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        ref.read(navigationProvider.notifier).setIndex(0);
+                      },
+                      child: _headerTitle(currentNavIndex),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   // Hidden Hives Icon (beside menu)
                   GestureDetector(
                     key: _hiddenHivesKey,
@@ -559,11 +619,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryAmber,
+                            color: AppTheme.brandBlue,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: AppTheme.primaryAmber.withValues(alpha: 0.3),
+                                color: AppTheme.brandBlue.withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -892,11 +952,9 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   void _openHiveDetail(HiveModel hive, {String? heroTag}) {
     Navigator.push(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            ProductDetailPage(
+      HiveOpenRoute<void>(
+        reducedMotion: MediaQuery.disableAnimationsOf(context),
+        builder: (context) => ProductDetailPage(
           hiveId: hive.id,
           title: hive.title,
           imageUrl: hive.imageUrl,
@@ -904,16 +962,8 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
           ownerDisplayName: hive.ownerDisplayName,
           heroTag: heroTag,
           allowedEditorIds: hive.allowedEditorIds,
+          cardColor: hive.cardColor,
         ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
-            child: child,
-          );
-        },
       ),
     );
   }

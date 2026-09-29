@@ -13,6 +13,8 @@ import '../providers/providers.dart';
 import '../services/image_storage_service.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/money.dart';
+import '../widgets/hive_title.dart';
 import '../widgets/report_sheet.dart';
 import 'create_wish_sheet.dart';
 
@@ -25,6 +27,9 @@ class ProductDetailPage extends ConsumerStatefulWidget {
   final String? heroTag;
   final List<String> allowedEditorIds; // Friends who can add wishes to this hive
 
+  /// The card colour key, so the header matches the card it opened from.
+  final String? cardColor;
+
   const ProductDetailPage({
     required this.title,
     required this.imageUrl,
@@ -33,6 +38,7 @@ class ProductDetailPage extends ConsumerStatefulWidget {
     this.ownerDisplayName = '',
     this.heroTag,
     this.allowedEditorIds = const [],
+    this.cardColor,
     super.key,
   });
 
@@ -137,12 +143,12 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryAmber.withValues(alpha: 0.1),
+                      color: AppTheme.brandBlue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.note_alt_outlined, 
-                      color: AppTheme.primaryAmber,
+                      color: AppTheme.brandBlue,
                       size: 24,
                     ),
                   ),
@@ -245,58 +251,43 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
     }
   }
 
+  /// The cover, sized by whatever tile it is placed in rather than by a fixed
+  /// height of its own.
   Widget _buildHeaderImage() {
     final path = widget.imageUrl.isNotEmpty
         ? widget.imageUrl
         : AppConstants.fallbackImage;
 
-    Widget image;
     if (ImageStorageService.isLocalPath(path)) {
-      image = Image.file(
+      return Image.file(
         File(path),
-        width: double.infinity,
-        height: 200,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholderImage(),
-      );
-    } else if (ImageStorageService.isNetworkPath(path)) {
-      image = CachedNetworkImage(
-        imageUrl: path,
-        width: double.infinity,
-        height: 200,
-        memCacheHeight: 500, // Optimize memory for header
-        fit: BoxFit.cover,
-        placeholder: (_, __) => _placeholderImage(),
-        errorWidget: (_, __, ___) => _placeholderImage(),
-      );
-    } else {
-      image = Image.asset(
-        path,
-        width: double.infinity,
-        height: 200,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _placeholderImage(),
       );
     }
-
-    return image;
+    if (ImageStorageService.isNetworkPath(path)) {
+      return CachedNetworkImage(
+        imageUrl: path,
+        memCacheHeight: 300,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _placeholderImage(),
+        errorWidget: (_, __, ___) => _placeholderImage(),
+      );
+    }
+    return Image.asset(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _placeholderImage(),
+    );
   }
 
   Widget _placeholderImage() {
-    return Container(
-      width: double.infinity,
-      height: 200,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.accentHoney.withValues(alpha: 0.4),
-            AppTheme.primaryAmber.withValues(alpha: 0.3),
-          ],
-        ),
+    return ColoredBox(
+      color: Colors.white.withValues(alpha: 0.85),
+      child: const Center(
+        child: Icon(Icons.card_giftcard_rounded,
+            size: 42, color: AppTheme.brandBlue),
       ),
-      child: const Icon(Icons.hive, size: 64, color: AppTheme.primaryAmber),
     );
   }
 
@@ -342,10 +333,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
       width: 52,
       height: 52,
       decoration: BoxDecoration(
-        color: AppTheme.accentHoney.withValues(alpha: 0.2),
+        color: AppTheme.tintSky.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(Icons.star_outline, size: 24, color: AppTheme.primaryAmber),
+      child: const Icon(Icons.star_outline, size: 24, color: AppTheme.brandBlue),
     );
   }
 
@@ -361,136 +352,44 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
           final scrollView = CustomScrollView(
             physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
             slivers: [
-              SliverAppBar(
-                expandedHeight: 240,
-                pinned: true,
-                stretch: true,
-                // Keep scaffold bg when collapsed; transparent when expanded (image shows)
-                backgroundColor: theme.scaffoldBackgroundColor,
-                // Always white text/icons since header sits over the dark scrim
-                foregroundColor: Colors.white,
-                title: Text(
-                  widget.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    shadows: [
-                      Shadow(blurRadius: 6, color: Colors.black54),
-                    ],
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    icon: Icon(
-                      _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded, 
-                      size: 28, 
-                      color: Colors.white
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isGridView = !_isGridView;
-                      });
-                    },
-                    tooltip: 'Toggle View',
-                  ),
-                  if (_isOwner) ...[
-                    IconButton(
-                      icon: const Icon(Icons.ios_share, color: Colors.white),
-                      onPressed: _shareHive,
-                      tooltip: 'Share Hive',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.white),
-                      onPressed: _confirmDeleteHive,
-                      tooltip: 'Delete Hive',
-                    ),
-                  ] else
-                    IconButton(
-                      icon: const Icon(Icons.flag_outlined, color: Colors.white),
-                      onPressed: () => ReportSheet.show(
-                        context,
-                        targetType: 'hive',
-                        targetId: widget.hiveId,
-                        targetOwnerUid: widget.ownerId,
-                        targetLabel: widget.title,
-                      ),
-                      tooltip: 'Report Hive',
-                    ),
-                ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Hero(
+              // Header panel: brand blue for your own hive, the hive tint
+              // when you are looking at someone else. Every action that used
+              // to live in the app bar is still here.
+              SliverToBoxAdapter(
+                child: _HiveHeader(
+                  title: widget.title,
+                  ownerDisplayName: widget.ownerDisplayName,
+                  isOwner: _isOwner,
+                  wishCount: wishes.length,
+                  totalCost: wishes.fold<double>(0, (sum, w) => sum + w.cost),
+                  accent: AppTheme.colorFor(widget.cardColor, widget.hiveId),
+                  cover: Hero(
                     tag: widget.heroTag ?? 'hive-${widget.hiveId}',
                     child: Material(
                       type: MaterialType.transparency,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _buildHeaderImage(),
-                          // Dark scrim at top so back button + title remain readable
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: 110,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withValues(alpha: 0.55),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: SizedBox(
+                          width: 96,
+                          height: 96,
+                          child: _buildHeaderImage(),
+                        ),
                       ),
                     ),
                   ),
-                  stretchModes: const [StretchMode.zoomBackground],
-                ),
-              ),
-
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text('Wishes', style: theme.textTheme.titleLarge),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${wishes.length}',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
+                  isGridView: _isGridView,
+                  onToggleView: () => setState(() => _isGridView = !_isGridView),
+                  onShare: _isOwner ? _shareHive : null,
+                  onDelete: _isOwner ? _confirmDeleteHive : null,
+                  onReport: _isOwner
+                      ? null
+                      : () => ReportSheet.show(
+                            context,
+                            targetType: 'hive',
+                            targetId: widget.hiveId,
+                            targetOwnerUid: widget.ownerId,
+                            targetLabel: widget.title,
                           ),
-                        ],
-                      ),
-                      if (!_isOwner && widget.ownerDisplayName.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            'Owned by ${widget.ownerDisplayName}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
                 ),
               ),
 
@@ -539,6 +438,18 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                           isOwner: _isOwner,
                           onToggle: () => _handleWishToggle(wish),
                           onNoteTap: () => _showNoteViewSheet(context, wish),
+                          onImageTap: wish.imageUrl.isEmpty
+                              ? null
+                              : () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => FullScreenImagePage(
+                                        imageUrl: wish.imageUrl,
+                                        images: wish.images,
+                                        heroTag: 'wish_image_${wish.id}',
+                                      ),
+                                    ),
+                                  ),
                           onLinkTap: wish.link.isNotEmpty
                               ? () => _launchUrl(wish.link)
                               : null,
@@ -594,14 +505,14 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(color: AppTheme.primaryAmber),
+          child: CircularProgressIndicator(color: AppTheme.brandBlue),
         ),
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
       floatingActionButton: _canAddWish
           ? FloatingActionButton(
               onPressed: _showAddWishSheet,
-              backgroundColor: AppTheme.primaryAmber,
+              backgroundColor: AppTheme.brandBlue,
               foregroundColor: Colors.white,
               elevation: 4,
               child: const Icon(Icons.add),
@@ -748,6 +659,161 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
   }
 }
 
+/// The hive header.
+///
+/// Stats are counted from the wishes already on screen, so nothing extra is
+/// read. Reserved is a count only — never which wish, and never by whom.
+class _HiveHeader extends StatelessWidget {
+  final String title;
+  final String ownerDisplayName;
+  final bool isOwner;
+  final int wishCount;
+  final double totalCost;
+  final Color accent;
+  final Widget cover;
+  final bool isGridView;
+  final VoidCallback onToggleView;
+  final VoidCallback? onShare;
+  final VoidCallback? onDelete;
+  final VoidCallback? onReport;
+
+  const _HiveHeader({
+    required this.title,
+    required this.ownerDisplayName,
+    required this.isOwner,
+    required this.wishCount,
+    required this.totalCost,
+    required this.accent,
+    required this.cover,
+    required this.isGridView,
+    required this.onToggleView,
+    this.onShare,
+    this.onDelete,
+    this.onReport,
+  });
+
+  /// White reads on brand blue; ink reads on every card tint.
+  Color get _fg => AppTheme.onColor(accent);
+
+  Widget _circleButton(IconData icon, VoidCallback? onTap, String tooltip) {
+    if (onTap == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: IconButton(
+        icon: Icon(icon, size: 20, color: _fg),
+        tooltip: tooltip,
+        onPressed: onTap,
+        style: IconButton.styleFrom(
+          backgroundColor: _fg.withValues(alpha: 0.14),
+          padding: const EdgeInsets.all(10),
+        ),
+      ),
+    );
+  }
+
+  Widget _stat(String value, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        decoration: BoxDecoration(
+          color: _fg.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.money(size: 20, color: _fg)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 13,
+                    color: _fg.withValues(alpha: 0.75))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          20, MediaQuery.of(context).padding.top + 8, 20, 22),
+      decoration: BoxDecoration(
+        color: accent,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back, size: 20, color: _fg),
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
+                style: IconButton.styleFrom(
+                  backgroundColor: _fg.withValues(alpha: 0.14),
+                  padding: const EdgeInsets.all(10),
+                ),
+              ),
+              const Spacer(),
+              _circleButton(
+                  isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                  onToggleView,
+                  'Toggle View'),
+              _circleButton(Icons.ios_share, onShare, 'Share Hive'),
+              _circleButton(Icons.delete_outline, onDelete, 'Delete Hive'),
+              _circleButton(Icons.flag_outlined, onReport, 'Report Hive'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              cover,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!isOwner && ownerDisplayName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          '$ownerDisplayName' "'s hive",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 13,
+                              color: _fg.withValues(alpha: 0.8)),
+                        ),
+                      ),
+                    HiveTitle(title, size: 30, color: _fg),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _stat('$wishCount', wishCount == 1 ? 'wish' : 'wishes'),
+              const SizedBox(width: 10),
+              _stat(formatMoney(totalCost), 'total'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WishTile extends StatefulWidget {
   final WishModel wish;
   final bool isCompleted; // Kept for compatibility if used, though we derive from wish
@@ -831,9 +897,9 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
         child: Container(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.rRow),
             border: Border.all(
-              color: AppTheme.primaryAmber.withValues(alpha: 0.3),
+              color: AppTheme.brandBlue.withValues(alpha: 0.3),
               width: 1.5,
             ),
             boxShadow: [
@@ -845,12 +911,12 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.rRow),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: widget.onNoteTap,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppTheme.rRow),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -862,13 +928,13 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryAmber.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppTheme.brandBlue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(14),
                             ),
                             child: const Icon(
                               Icons.note_alt_outlined, 
                               size: 20, 
-                              color: AppTheme.primaryAmber
+                              color: AppTheme.brandBlue
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -938,12 +1004,12 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
         elevation: 0,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: InkWell(
           onTap: widget.onToggle, // Allow everyone to toggle (owner logic handled in callback)
           onLongPress: widget.isOwner ? widget.onEdit : null, // Edit on long press for owner
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(18),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -994,9 +1060,9 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                              ),
                            );
                          },
-                         borderRadius: BorderRadius.circular(8),
+                         borderRadius: BorderRadius.circular(14),
                          child: ClipRRect(
-                           borderRadius: BorderRadius.circular(8),
+                           borderRadius: BorderRadius.circular(14),
                            child: SizedBox(
                              width: 48,
                              height: 48,
@@ -1072,7 +1138,7 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                           child: Text(
                             'Fulfilled',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppTheme.primaryAmber,
+                              color: AppTheme.brandBlue,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1097,67 +1163,44 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                             ],
                           ),
                         ),
-                      // Link Button
-                      if (widget.wish.link.isNotEmpty)
-                         Padding(
-                           padding: const EdgeInsets.only(top: 4),
-                           child: GestureDetector(
-                             onTap: widget.onLinkTap,
-                             child: Row(
-                               mainAxisSize: MainAxisSize.min,
-                               children: [
-                                 Icon(
-                                   Icons.link, 
-                                   size: 16, 
-                                   color: isCompleted ? Colors.grey : theme.colorScheme.primary
-                                 ),
-                                 const SizedBox(width: 4),
-                                 Flexible(
-                                   child: Text(
-                                     'View Link',
-                                     style: theme.textTheme.bodySmall?.copyWith(
-                                       color: isCompleted ? Colors.grey : theme.colorScheme.primary,
-                                       fontWeight: FontWeight.w600,
-                                       decoration: isCompleted ? TextDecoration.lineThrough : null,
-                                     ),
-                                     maxLines: 1,
-                                     overflow: TextOverflow.ellipsis,
-                                   ),
-                                 ),
-                               ],
-                             ),
-                           ),
-                         ),
                     ],
                   ),
                 ),
                 
-                if (widget.isOwner)
-                   Row(
-                     mainAxisSize: MainAxisSize.min,
-                     children: [
-                       if (isCompleted)
-                         Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Icon(Icons.check_circle, size: 20, color: AppTheme.success),
-                         ),
-                       PopupMenuButton<String>(
-                         icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
-                         onSelected: (val) {
-                           if (val == 'edit') widget.onEdit?.call();
-                           if (val == 'delete') widget.onDelete?.call();
-                         },
-                         itemBuilder: (_) => [
-                           const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                           const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-                         ],
-                       ),
-                     ],
-                   )
-                else if (widget.onLinkTap != null && !isCompleted && widget.wish.link.isNotEmpty)
-                  // Show link button for non-owners if we didn't show it inline (redundant but safe)
-                  // Actually, let's just stick to inline.
-                  const SizedBox.shrink(),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Its own hit target, so opening the link can never be
+                    // mistaken for marking the wish done.
+                    if (widget.wish.link.isNotEmpty && widget.onLinkTap != null)
+                      IconButton(
+                        icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                        color: theme.colorScheme.primary,
+                        tooltip: 'Open link',
+                        onPressed: widget.onLinkTap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    if (widget.isOwner) ...[
+                      if (isCompleted)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 4),
+                          child: Icon(Icons.check_circle,
+                              size: 20, color: AppTheme.success),
+                        ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                        onSelected: (val) {
+                          if (val == 'edit') widget.onEdit?.call();
+                          if (val == 'delete') widget.onDelete?.call();
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -1173,6 +1216,11 @@ class _WishGridCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onNoteTap;
   final VoidCallback? onLinkTap;
+
+  /// Opens the image viewer. The picture is the obvious thing to tap, so it
+  /// gets its own target rather than toggling the wish like the rest of the
+  /// tile does.
+  final VoidCallback? onImageTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final Widget Function(String) buildImage;
@@ -1183,6 +1231,7 @@ class _WishGridCard extends StatelessWidget {
     required this.onToggle,
     required this.onNoteTap,
     required this.onLinkTap,
+    this.onImageTap,
     required this.onEdit,
     required this.onDelete,
     required this.buildImage,
@@ -1197,9 +1246,9 @@ class _WishGridCard extends StatelessWidget {
       return Container(
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.rRow),
           border: Border.all(
-            color: AppTheme.primaryAmber.withValues(alpha: 0.35),
+            color: AppTheme.brandBlue.withValues(alpha: 0.35),
             width: 1.5,
           ),
           boxShadow: [
@@ -1211,7 +1260,7 @@ class _WishGridCard extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.rRow),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -1226,13 +1275,13 @@ class _WishGridCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryAmber.withValues(alpha: 0.12),
+                            color: AppTheme.brandBlue.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Icon(
                             Icons.note_alt_outlined, 
                             size: 16, 
-                            color: AppTheme.primaryAmber
+                            color: AppTheme.brandBlue
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1288,7 +1337,7 @@ class _WishGridCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.rRow),
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.15),
           width: 1,
@@ -1302,7 +1351,7 @@ class _WishGridCard extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.rRow),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -1317,14 +1366,17 @@ class _WishGridCard extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       if (wish.imageUrl.isNotEmpty)
-                        buildImage(wish.imageUrl)
+                        GestureDetector(
+                          onTap: onImageTap,
+                          child: buildImage(wish.imageUrl),
+                        )
                       else
                         Container(
-                          color: AppTheme.accentHoney.withValues(alpha: 0.15),
+                          color: AppTheme.tintSky.withValues(alpha: 0.15),
                           child: const Icon(
                             Icons.shopping_bag_outlined, 
                             size: 32, 
-                            color: AppTheme.primaryAmber
+                            color: AppTheme.brandBlue
                           ),
                         ),
                       
@@ -1431,7 +1483,7 @@ class _WishGridCard extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Text(
                                   '₹${wish.cost.toStringAsFixed(0)}',
@@ -1444,20 +1496,21 @@ class _WishGridCard extends StatelessWidget {
                             else
                               const SizedBox.shrink(),
 
-                            if (wish.link.isNotEmpty)
-                              GestureDetector(
-                                onTap: onLinkTap,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                                  ),
-                                  child: Icon(
-                                    Icons.link, 
-                                    size: 14, 
-                                    color: theme.colorScheme.primary
-                                  ),
+                            if (wish.link.isNotEmpty && onLinkTap != null)
+                              IconButton(
+                                icon: const Icon(Icons.open_in_new_rounded),
+                                iconSize: 16,
+                                color: theme.colorScheme.primary,
+                                tooltip: 'Open link',
+                                onPressed: onLinkTap,
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                // A real 36px target, rather than a 22px dot.
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary
+                                      .withValues(alpha: 0.10),
                                 ),
                               ),
                           ],

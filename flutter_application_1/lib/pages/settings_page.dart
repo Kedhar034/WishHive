@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart'; // Add Google Fonts import
 import '../providers/providers.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
@@ -15,7 +14,6 @@ import 'welcome_page.dart';
 import 'privacy_policy_page.dart';
 
 import '../l10n/app_localizations.dart';
-import '../providers/locale_provider.dart';
 import '../providers/theme_provider.dart';
 import '../core/theme/app_theme.dart';
 
@@ -26,30 +24,32 @@ class SettingsPage extends ConsumerStatefulWidget {
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends ConsumerState<SettingsPage> {
-  
-  String _getLanguageName(String code) {
-    switch (code) {
-      case 'en': return 'English';
-      case 'fr': return 'Français';
-      case 'hi': return 'हिन्दी';
-      case 'te': return 'తెలుగు';
-      default: return 'English';
-    }
-  }
+/// A quiet all-caps group heading, matching the design.
+class _SectionLabel extends StatelessWidget {
+  final String text;
 
-  Widget _buildLanguageOption(BuildContext context, WidgetRef ref, String name, String code) {
-    return SimpleDialogOption(
-      onPressed: () {
-        ref.read(localeProvider.notifier).setLocale(Locale(code));
-        Navigator.pop(context);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(name),
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+          color: AppTheme.muted,
+        ),
       ),
     );
   }
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  
 
   void _signOut() async {
     try {
@@ -286,19 +286,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final myUserAsync = ref.watch(currentUserStreamProvider); 
     final theme = Theme.of(context);
 
-    // Elegant subtle color for list items
-    final tileColor = theme.colorScheme.surfaceContainerLow;
-    // Distinct richer color for the profile card
-    final profileCardColor = theme.colorScheme.primary.withValues(alpha: 0.08);
+    final isLight = theme.brightness == Brightness.light;
+    final tileColor = isLight ? AppTheme.surfaceWhite : AppTheme.darkCard;
+    final profileCardColor = isLight ? AppTheme.tintSky : AppTheme.darkCard;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Settings'),
-        centerTitle: true,
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-      ),
       body: myUserAsync.when(
         data: (user) {
           if (user == null) return const Center(child: Text('User not signed in'));
@@ -312,11 +304,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: profileCardColor, 
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    ),
+                    color: profileCardColor,
+                    borderRadius: BorderRadius.circular(AppTheme.rHive),
                   ),
                   child: Row(
                     children: [
@@ -372,39 +361,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                
-                // Language
-                ListTile(
-                  leading: const Icon(Icons.language),
-                  title: Text(AppLocalizations.of(context)!.language),
-                  subtitle: Text(_getLanguageName(ref.watch(localeProvider).languageCode)),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  tileColor: tileColor,
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => SimpleDialog(
-                        title: Text(AppLocalizations.of(context)!.language),
-                        children: [
-                          _buildLanguageOption(context, ref, 'English', 'en'),
-                          _buildLanguageOption(context, ref, 'Français', 'fr'),
-                          _buildLanguageOption(context, ref, 'हिन्दी', 'hi'),
-                          _buildLanguageOption(context, ref, 'తెలుగు', 'te'),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 26),
+                const _SectionLabel('ACCOUNT & PRIVACY'),
 
                 // Privacy Policy
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: Text(AppLocalizations.of(context)!.privacyPolicy),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.rRow)),
                   tileColor: tileColor,
                   onTap: _launchPrivacyPolicy,
                 ),
@@ -416,18 +381,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('Share WishHive'),
                   subtitle: Text(AppLocalizations.of(context)!.friends),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.rRow)),
                   tileColor: tileColor,
                   onTap: _shareApp,
                 ),
-                const SizedBox(height: 8),
-                
+                const SizedBox(height: 26),
+                const _SectionLabel('APPEARANCE'),
+
                 // Appearance Container
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: tileColor,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(AppTheme.rHive),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,8 +411,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text('App Theme',
-                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600,
-                                    color: theme.colorScheme.onSurface)),
+                                style: theme.textTheme.titleMedium),
                           ),
                         ],
                       ),
@@ -527,10 +492,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryAmber : theme.colorScheme.surface,
+            color: isSelected ? AppTheme.brandBlue : theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? AppTheme.primaryAmber : theme.colorScheme.outline.withValues(alpha: 0.3),
+              color: isSelected ? AppTheme.brandBlue : theme.colorScheme.outline.withValues(alpha: 0.3),
             ),
           ),
           child: Column(

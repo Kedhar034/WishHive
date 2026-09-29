@@ -97,6 +97,7 @@ Future<void> _open(
         ownerId: hive.ownerId,
         ownerDisplayName: hive.ownerDisplayName,
         allowedEditorIds: hive.allowedEditorIds,
+        cardColor: hive.cardColor,
       ),
     ),
   );
@@ -129,7 +130,7 @@ void _offerFriendRequest(
       content: Text('Also see the hives $name shares with friends?'),
       action: SnackBarAction(
         label: 'ADD FRIEND',
-        textColor: AppTheme.primaryAmber,
+        textColor: AppTheme.brandBlue,
         onPressed: () async {
           try {
             await ref.read(firestoreServiceProvider).sendFriendRequest(ownerId);

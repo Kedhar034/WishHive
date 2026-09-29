@@ -650,6 +650,8 @@ class FirestoreService {
         'editorIds': hive.allowedEditorIds,
         'allowedViewerIds': hive.allowedViewerIds,
         'allowedEditorIds': hive.allowedEditorIds,
+        // Null clears it, which puts the card back on its id-derived tint.
+        'cardColor': hive.cardColor,
       });
     } catch (e) {
       debugPrint('Error updating hive: $e');

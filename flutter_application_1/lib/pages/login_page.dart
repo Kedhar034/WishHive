@@ -184,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryAmber,
+                        backgroundColor: AppTheme.brandBlue,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -209,7 +209,7 @@ class _LoginPageState extends State<LoginPage> {
                         onTap: () => Navigator.pop(context),
                         child: Text("Sign Up",
                             style: TextStyle(
-                                color: AppTheme.primaryAmber, fontWeight: FontWeight.w600, fontSize: 14)),
+                                color: AppTheme.brandBlue, fontWeight: FontWeight.w600, fontSize: 14)),
                       ),
                     ],
                   ),

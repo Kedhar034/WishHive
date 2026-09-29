@@ -6,6 +6,11 @@ class HiveModel {
   final String id;
   final String title;
   final String imageUrl;
+
+  /// Card colour key, one of AppTheme.namedTints. Null means the colour
+  /// is derived from the id, which is how every hive made before the
+  /// picker existed still looks right.
+  final String? cardColor;
   final String note;
   final HivePrivacy privacy;
   final List<String> allowedViewerIds; // Firestore: viewerIds (legacy: allowedViewerIds)
@@ -24,6 +29,7 @@ class HiveModel {
     required this.id,
     required this.title,
     this.imageUrl = '',
+    this.cardColor,
     this.note = '',
     this.privacy = HivePrivacy.private,
     this.allowedViewerIds = const [],
@@ -49,6 +55,7 @@ class HiveModel {
       id: id,
       title: data['title'] as String? ?? 'Untitled',
       imageUrl: data['imageUrl'] as String? ?? '',
+      cardColor: data['cardColor'] as String?,
       note: data['note'] as String? ?? '',
       privacy: _parsePrivacy(data['privacy'] as String?),
       allowedViewerIds:
@@ -71,6 +78,7 @@ class HiveModel {
     return {
       'title': title,
       'imageUrl': imageUrl,
+      if (cardColor != null) 'cardColor': cardColor,
       'note': note,
       'privacy': privacy.name,
       'viewerIds': allowedViewerIds,
@@ -91,6 +99,7 @@ class HiveModel {
     String? id,
     String? title,
     String? imageUrl,
+    String? cardColor,
     String? note,
     HivePrivacy? privacy,
     List<String>? allowedViewerIds,
@@ -109,6 +118,7 @@ class HiveModel {
       id: id ?? this.id,
       title: title ?? this.title,
       imageUrl: imageUrl ?? this.imageUrl,
+      cardColor: cardColor ?? this.cardColor,
       note: note ?? this.note,
       privacy: privacy ?? this.privacy,
       allowedViewerIds: allowedViewerIds ?? this.allowedViewerIds,

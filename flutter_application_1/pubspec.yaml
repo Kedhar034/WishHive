@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.3+4
+version: 1.0.4+5
 
 environment:
   sdk: ^3.9.2
@@ -109,6 +109,7 @@ flutter:
     - assets/lottie/
     - assets/categories/
     - assets/video.mp4
+    - assets/splash/
 
   # Bundled rather than fetched through google_fonts, so the welcome screen
   # renders in the right face on its very first frame.
@@ -123,6 +124,8 @@ flutter:
           weight: 500
         - asset: assets/fonts/Figtree-SemiBold.ttf
           weight: 600
+        - asset: assets/fonts/Figtree-Bold.ttf
+          weight: 700
     - family: InstrumentSerif
       fonts:
         - asset: assets/fonts/InstrumentSerif-Italic.ttf

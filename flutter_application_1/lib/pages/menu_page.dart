@@ -25,8 +25,8 @@ class MenuPage extends ConsumerWidget {
     final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
 
     // Premium colors updated to match app branding (Amber)
-    final menuBgColor = isDark ? const Color(0xFF1A1A1A) : AppTheme.primaryAmber;
-    final activeItemColor = isDark ? AppTheme.primaryAmber : Colors.black.withValues(alpha: 0.15);
+    final menuBgColor = isDark ? const Color(0xFF1A1A1A) : AppTheme.brandBlue;
+    final activeItemColor = isDark ? AppTheme.brandBlue : Colors.black.withValues(alpha: 0.15);
 
     return Drawer(
       backgroundColor: menuBgColor,

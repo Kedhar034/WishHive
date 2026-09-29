@@ -7,6 +7,8 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'pages/auth_wrapper.dart';
+import 'pages/splash_gate.dart';
+import 'widgets/offline_banner.dart';
 import 'providers/theme_provider.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -90,7 +92,7 @@ class BeehiveApp extends ConsumerWidget {
         Locale('hi'), // Hindi
         Locale('te'), // Telugu
       ],
-      home: const AuthWrapper(),
+      home: const OfflineBanner(child: SplashGate(child: AuthWrapper())),
     );
   }
 }

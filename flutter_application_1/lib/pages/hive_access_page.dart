@@ -49,7 +49,7 @@ class _HiveAccessPageState extends ConsumerState<HiveAccessPage> {
             icon: const Icon(Icons.check),
             label: const Text('Save'),
             style: TextButton.styleFrom(
-              foregroundColor: AppTheme.primaryAmber,
+              foregroundColor: AppTheme.brandBlue,
               textStyle: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
@@ -80,13 +80,13 @@ class _HiveAccessPageState extends ConsumerState<HiveAccessPage> {
                   margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryAmber.withValues(alpha: 0.10),
+                    color: AppTheme.brandBlue.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
                       const Icon(Icons.info_outline,
-                          color: AppTheme.primaryAmber, size: 18),
+                          color: AppTheme.brandBlue, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(

@@ -1,5 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../widgets/hive_card.dart';
+import '../widgets/hive_title.dart';
+import '../core/theme/app_theme.dart';
+import '../widgets/color_wheel_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hive_model.dart';
@@ -24,6 +28,7 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
   File? _selectedImage;
+  String? _cardColor;
   String? _networkImageUrl;
   HivePrivacy _privacy = HivePrivacy.private;
   List<String> _allowedViewerIds = [];
@@ -101,6 +106,7 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
         privacy: _privacy,
         allowedViewerIds: _allowedViewerIds,
         allowedEditorIds: _allowedEditorIds,
+        cardColor: _cardColor,
       );
 
       if (widget.hiveToEdit == null) {
@@ -120,6 +126,81 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// The colour the card is showing right now, whatever its source.
+  Color get _currentColor =>
+      AppTheme.colorFor(_resolvedColorKey, widget.hiveToEdit?.id ?? '');
+
+  Future<void> _openColorWheel() async {
+    var picked = _currentColor;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 20, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const HiveTitle('Card colour', size: 30),
+              const SizedBox(height: 18),
+              ColorWheelPicker(
+                initial: picked,
+                onChanged: (c) => setSheetState(() => picked = c),
+              ),
+              const SizedBox(height: 20),
+              // The card itself is the preview, so the choice is judged
+              // against the thing it actually affects.
+              IgnorePointer(
+                child: HiveCard(
+                  title: _titleController.text.trim().isEmpty
+                      ? 'Your hive'
+                      : _titleController.text.trim(),
+                  items: widget.hiveToEdit?.itemCount ?? 0,
+                  price: widget.hiveToEdit?.totalCost ?? 0,
+                  imageUrl: _networkImageUrl ?? '',
+                  colorKey: AppTheme.keyForColor(picked),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
+                  child: const Text('Use this colour'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      setState(() => _cardColor = AppTheme.keyForColor(picked));
+    }
+  }
+
+  /// The key currently in force: what was picked in this sheet, or the colour
+  /// the hive already shows, so the ring starts on the right swatch.
+  String? get _resolvedColorKey {
+    if (_cardColor != null) return _cardColor;
+    final existing = widget.hiveToEdit;
+    if (existing == null) return null;
+    if (existing.cardColor != null) return existing.cardColor;
+    final shown = AppTheme.tintFor(existing.id);
+    for (final entry in AppTheme.namedTints.entries) {
+      if (entry.value == shown) return entry.key;
+    }
+    return null;
   }
 
   @override
@@ -147,9 +228,76 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              Text(
-                widget.hiveToEdit == null ? 'Create New Hive' : 'Edit Hive',
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: HiveTitle(
+                  widget.hiveToEdit == null ? 'New hive' : 'Edit hive',
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Live preview of the card, rebuilt straight from the title
+              // field so nothing extra has to be tracked in state.
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _titleController,
+                builder: (context, value, _) {
+                  final preview = value.text.trim();
+                  return Stack(
+                    children: [
+                      HiveCard(
+                        title: preview.isEmpty ? 'Your hive' : preview,
+                        items: widget.hiveToEdit?.itemCount ?? 0,
+                        price: widget.hiveToEdit?.totalCost ?? 0,
+                        imageUrl: _networkImageUrl ?? '',
+                        tintSeed: widget.hiveToEdit?.id ?? '',
+                        colorKey: _resolvedColorKey,
+                      ),
+                      Positioned(
+                        left: 16,
+                        bottom: 10,
+                        child: Text(
+                          'Live preview of your card',
+                          style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 12,
+                            color: AppTheme.muted.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Card colour', style: theme.textTheme.titleSmall),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final entry in AppTheme.namedTints.entries)
+                      _ColorRing(
+                        color: entry.value,
+                        selected: _resolvedColorKey == entry.key,
+                        onTap: () => setState(() => _cardColor = entry.key),
+                      ),
+                    // Anything beyond the presets, picked from the wheel.
+                    _ColorRing(
+                      color: _currentColor,
+                      selected: _resolvedColorKey != null &&
+                          !AppTheme.namedTints.containsKey(_resolvedColorKey),
+                      showWheel: true,
+                      onTap: _openColorWheel,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
               ImagePickerWidget(
@@ -235,6 +383,58 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A colour swatch that shows selection as a ring around it rather than a tick
+/// on top, so the colour itself is never obscured.
+class _ColorRing extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Marks the swatch that opens the wheel rather than setting a preset.
+  final bool showWheel;
+
+  const _ColorRing({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    this.showWheel = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ring = Theme.of(context).colorScheme.onSurface;
+
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 44,
+          height: 44,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? ring : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: showWheel
+                ? Icon(Icons.tune_rounded,
+                    size: 16, color: AppTheme.onColor(color))
+                : null,
           ),
         ),
       ),
