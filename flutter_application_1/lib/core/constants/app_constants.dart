@@ -3,17 +3,32 @@ class AppConstants {
   static const String appName = 'WishHive';
   static const String appTagline = 'Your new mind is here.';
 
-  // Default images available in the app
+  // Default images available in the app (Categories)
   static const List<String> defaultImages = [
-    'assets/images/c5.jpeg',
-    'assets/images/c10.jpeg',
-    'assets/images/c13.jpeg',
-    'assets/images/c4.jpeg',
+    'assets/categories/Beaut.jpeg',
+    'assets/categories/Book.jpeg',
+    'assets/categories/Fitnes.jpeg',
+    'assets/categories/Flower.jpeg',
+    'assets/categories/Foo.jpeg',
+    'assets/categories/Gamin.jpeg',
+    'assets/categories/Gift.jpeg',
+    'assets/categories/Movie.jpeg',
+    'assets/categories/Musi.jpeg',
+    'assets/categories/Part.jpeg',
+    'assets/categories/Sport.jpeg',
+    'assets/categories/Tec.jpeg',
+    'assets/categories/Trave.jpeg',
+    'assets/categories/anniversary.jpeg',
+    'assets/categories/bike.jpeg',
+    'assets/categories/jwellery.jpeg',
+    'assets/categories/pet.jpeg',
+    'assets/categories/shoppin.jpeg',
+    'assets/categories/wedding.jpeg',
   ];
 
   static const String fallbackImage = 'https://placehold.co/600x400';
   
-  // Avatars for user profiles
+  // Avatars for user profiles (Characters c1 to c12 only)
   static const List<String> avatarImages = [
     'assets/images/c1.jpeg',
     'assets/images/c2.jpeg',
@@ -27,25 +42,8 @@ class AppConstants {
     'assets/images/c10.jpeg',
     'assets/images/c11.jpeg',
     'assets/images/c12.jpeg',
-    'assets/images/c13.jpeg',
-    'assets/images/c14.jpeg',
-    'assets/images/c15.jpeg',
-    'assets/images/c16.jpeg',
-    'assets/images/c17.jpeg',
-    'assets/images/c18.jpeg',
-    'assets/images/c19.jpeg',
-    'assets/images/c20.jpeg',
-    'assets/images/c21.jpeg',
-    'assets/images/c22.jpeg',
-    'assets/images/c23.jpeg',
-    
   ];
 
-  // Default cover images for Hives
-  static const List<String> hiveImages = [
-    'assets/images/g1.jpeg',
-    'assets/images/g2.jpeg',
-    'assets/images/g3.jpeg',
-    'assets/images/g4.jpeg',
-  ];
+  // Default cover images for Hives (using same categories)
+  static const List<String> hiveImages = defaultImages;
 }

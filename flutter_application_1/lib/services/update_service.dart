@@ -79,7 +79,7 @@ class UpdateService {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.12),
+                    color: Colors.amber.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Image.asset(
@@ -110,7 +110,7 @@ class UpdateService {
                       ? 'To keep your experience sweet and secure, we\'ve released a critical update. Please update the app to continue your journey!'
                       : 'We\'ve added some new buzz! Update now to enjoy the latest features, improvements, and bug fixes.',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,
@@ -153,7 +153,7 @@ class UpdateService {
                     child: Text(
                       'Maybe Later',
                       style: TextStyle(
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                         fontWeight: FontWeight.w600,
                       ),
                     ),

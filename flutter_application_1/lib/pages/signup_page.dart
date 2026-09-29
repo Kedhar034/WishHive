@@ -114,7 +114,7 @@ class _SignupPageState extends State<SignupPage> {
                 children: [
                   Hero(
                     tag: 'app_logo',
-                    child: const CircularLogo(size: 100, padding: 16),
+                    child: const CircularLogo(size: 100),
                   ),
                   const SizedBox(height: 32),
                   Text(

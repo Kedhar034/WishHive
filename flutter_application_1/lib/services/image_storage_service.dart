@@ -13,6 +13,33 @@ class ImageStorageService {
   static const String _imageDir = 'beehive_images';
   static const _uuid = Uuid();
 
+  /// Mirrors the cap enforced in storage.rules, so the user gets a clear
+  /// message instead of an opaque upload failure.
+  static const int maxImageBytes = 10 * 1024 * 1024;
+
+  static const Set<String> _allowedExtensions = {
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp',
+  };
+
+  /// Returns an error message, or null when the file is acceptable.
+  static Future<String?> validateImage(File file) async {
+    if (!await file.exists()) return 'That file no longer exists.';
+
+    final extension = file.path.split('.').last.toLowerCase();
+    if (!_allowedExtensions.contains(extension)) {
+      return 'Only image files are supported.';
+    }
+
+    final bytes = await file.length();
+    if (bytes > maxImageBytes) {
+      final mb = (bytes / (1024 * 1024)).toStringAsFixed(1);
+      return 'That image is ${mb}MB. Please choose one under 10MB.';
+    }
+    if (bytes == 0) return 'That image appears to be empty.';
+
+    return null;
+  }
+
   /// Save an image file to the app's document directory.
   /// Returns the absolute path of the saved image.
   static Future<String> saveImage(File imageFile) async {
@@ -56,7 +83,24 @@ class ImageStorageService {
           .child('wishes')
           .child(fileName);
 
-      final uploadTask = ref.putFile(imageFile);
+      // storage.rules requires contentType to match image/*. Setting it
+      // explicitly rather than relying on the SDK inferring it from the
+      // extension, which a compressed temp file can defeat.
+      const typeByExtension = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+        'bmp': 'image/bmp',
+      };
+
+      final uploadTask = ref.putFile(
+        imageFile,
+        SettableMetadata(contentType: typeByExtension[extension] ?? 'image/jpeg'),
+      );
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
       debugPrint('Image uploaded to: $downloadUrl');

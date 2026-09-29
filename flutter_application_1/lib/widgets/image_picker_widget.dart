@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../core/constants/app_constants.dart';
+import '../services/image_storage_service.dart';
+import 'custom_snackbar.dart';
 
 /// A reusable image picker widget that supports camera, gallery, and default images.
 class ImagePickerWidget extends StatelessWidget {
@@ -221,20 +222,23 @@ class ImagePickerWidget extends StatelessWidget {
 
     if (result == null) return null;
 
-    if (result == 'camera') {
-        final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80);
-        return picked != null ? File(picked.path) : null;
-    } else if (result == 'gallery') {
-        final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
-        return picked != null ? File(picked.path) : null;
+    if (result == 'camera' || result == 'gallery') {
+        final picked = await ImagePicker().pickImage(
+          source: result == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          imageQuality: 80,
+        );
+        if (picked == null) return null;
+
+        final file = File(picked.path);
+        final problem = await ImageStorageService.validateImage(file);
+        if (problem != null) {
+          if (context.mounted) CustomSnackBar.showError(context, problem);
+          return null;
+        }
+        return file;
     } else if (result is String) {
-        // It's a path from default images
-        return File(result); // We return it as a File object, but logic upstream must handle assets
-        // Wait, ImagePickerWidget.pickImage returns Future<File?>.
-        // If we select an asset path, we can't easily return a File object that works for 'asset'.
-        // BUT, the caller (CreateWishSheet) expects a File?.
-        // CreateWishSheet handles assets specially if _selectedImage path starts with 'assets/'.
-        // So `File('assets/images/c1.jpeg')` is valid as a holder of the path string.
+        // A default-image asset path. Callers detect the 'assets/' prefix and
+        // treat it as an asset rather than a real file.
         return File(result);
     }
     

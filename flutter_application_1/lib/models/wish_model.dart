@@ -5,6 +5,9 @@ class WishModel {
   final String name;
   final String subtitle;
   final String imageUrl;
+  /// Extra images from the product page. imageUrl stays the primary one, so
+  /// every existing reader keeps working unchanged.
+  final List<String> images;
   final String hiveId;
   final DateTime? date;
   final int quantity;
@@ -17,12 +20,14 @@ class WishModel {
   final bool ownerSeen; // false when a friend fulfills — triggers notification dot
   final String addedByUid; // UID of who added this wish (empty = owner added it)
   final String addedByName; // Display name of who added this wish
+  final bool isNote; // Whether this is a text note instead of a product wish
 
   WishModel({
     required this.id,
     required this.name,
     this.subtitle = '',
     required this.imageUrl,
+    this.images = const [],
     required this.hiveId,
     this.date,
     this.quantity = 1,
@@ -35,27 +40,34 @@ class WishModel {
     this.ownerSeen = true,
     this.addedByUid = '',
     this.addedByName = '',
+    this.isNote = false,
   });
 
-  factory WishModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+  factory WishModel.fromFirestore(DocumentSnapshot doc) =>
+      WishModel.fromMap(doc.data() as Map<String, dynamic>? ?? {}, doc.id);
+
+  /// Parsing split out from [fromFirestore] so it can be exercised directly in
+  /// tests without a Firestore instance.
+  factory WishModel.fromMap(Map<String, dynamic> data, String id) {
     return WishModel(
-      id: doc.id,
+      id: id,
       name: data['name'] as String? ?? 'No Name',
       subtitle: data['subtitle'] as String? ?? '',
       imageUrl: data['imageUrl'] as String? ?? '',
+      images: List<String>.from(data['images'] ?? const []),
       hiveId: data['hiveId'] as String? ?? '',
       date: _parseDate(data['date']),
       quantity: (data['quantity'] as num?)?.toInt() ?? 1,
       note: data['note'] as String? ?? '',
       link: data['link'] as String? ?? '',
       cost: (data['cost'] as num?)?.toDouble() ?? 0.0,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      createdAt: _parseDate(data['createdAt']),
       fulfilledBy: data['fulfilledBy'] as String? ?? '',
       fulfilledByName: data['fulfilledByName'] as String? ?? '',
       ownerSeen: data['ownerSeen'] as bool? ?? true,
       addedByUid: data['addedByUid'] as String? ?? '',
       addedByName: data['addedByName'] as String? ?? '',
+      isNote: data['isNote'] as bool? ?? false,
     );
   }
 
@@ -64,6 +76,7 @@ class WishModel {
       'name': name,
       'subtitle': subtitle,
       'imageUrl': imageUrl,
+      'images': images,
       'hiveId': hiveId,
       'date': date != null ? Timestamp.fromDate(date!) : null,
       'quantity': quantity,
@@ -76,6 +89,7 @@ class WishModel {
       'ownerSeen': ownerSeen,
       'addedByUid': addedByUid,
       'addedByName': addedByName,
+      'isNote': isNote,
     };
   }
 
@@ -84,6 +98,7 @@ class WishModel {
     String? name,
     String? subtitle,
     String? imageUrl,
+    List<String>? images,
     String? hiveId,
     DateTime? date,
     int? quantity,
@@ -96,12 +111,14 @@ class WishModel {
     bool? ownerSeen,
     String? addedByUid,
     String? addedByName,
+    bool? isNote,
   }) {
     return WishModel(
       id: id ?? this.id,
       name: name ?? this.name,
       subtitle: subtitle ?? this.subtitle,
       imageUrl: imageUrl ?? this.imageUrl,
+      images: images ?? this.images,
       hiveId: hiveId ?? this.hiveId,
       date: date ?? this.date,
       quantity: quantity ?? this.quantity,
@@ -114,6 +131,7 @@ class WishModel {
       ownerSeen: ownerSeen ?? this.ownerSeen,
       addedByUid: addedByUid ?? this.addedByUid,
       addedByName: addedByName ?? this.addedByName,
+      isNote: isNote ?? this.isNote,
     );
   }
 

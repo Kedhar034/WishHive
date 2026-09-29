@@ -1,0 +1,18 @@
+{
+  "name": "wishhive-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backfill": "node backfill.mjs",
+    "backfill:commit": "node backfill.mjs --commit",
+    "verify": "node backfill.mjs --verify",
+    "seed:test": "node seed-test-account.mjs",
+    "seed:test:commit": "node seed-test-account.mjs --commit",
+    "seed:test:clean": "node seed-test-account.mjs --clean --commit",
+    "rehearse": "firebase emulators:exec --only firestore --project demo-wishhive --config ../firebase.json \"node seed-legacy.mjs && node backfill.mjs && node backfill.mjs --commit && node backfill.mjs --verify && node backfill.mjs --commit && node backfill.mjs --verify\""
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2"
+  }
+}

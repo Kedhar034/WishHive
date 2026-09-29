@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 import '../services/image_storage_service.dart';
@@ -129,11 +127,28 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
       // If no photo selected, use fallback or existing
       photoUrl ??= AppConstants.fallbackImage;
 
+      final username = _usernameController.text.trim().toLowerCase();
+
+      // Claim the name before writing the profile. Two people submitting the
+      // same username at the same moment both passed the availability check;
+      // only one of them can win this.
+      final claimed = await _firestoreService.claimUsername(username);
+      if (!claimed) {
+        if (mounted) {
+          setState(() {
+            _isUsernameAvailable = false;
+            _usernameError = 'Username was just taken. Please pick another.';
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       await _firestoreService.updateUser(UserModel(
         uid: uid,
         email: widget.firebaseUser?.email ?? '',
-        displayName: _usernameController.text.trim(), // Use username as display name primarily for now
-        username: _usernameController.text.trim().toLowerCase(),
+        displayName: username, // Use username as display name primarily for now
+        username: username,
         photoUrl: photoUrl,
       ));
 

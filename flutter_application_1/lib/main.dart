@@ -48,7 +48,12 @@ void main() async {
   // Activate App Check
   try {
     await FirebaseAppCheck.instance.activate(
+      // The replacement parameters take new provider classes rather than these
+      // enums, so this stays on the deprecated form until that is migrated
+      // deliberately. App Check misconfiguration locks every user out.
+      // ignore: deprecated_member_use
       androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      // ignore: deprecated_member_use
       appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.deviceCheck,
     );
   } catch (e) {

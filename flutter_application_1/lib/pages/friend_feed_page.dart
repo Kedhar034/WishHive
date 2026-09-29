@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/providers.dart';
 import '../models/hive_model.dart';
 import '../models/user_model.dart';
 import '../widgets/hive_card.dart';
 import '../widgets/skeleton_hive_card.dart';
+import '../widgets/app_refresh.dart';
+import '../services/firestore_service.dart';
+import '../widgets/avatar_image.dart';
 import '../core/constants/app_constants.dart';
 import 'product_detail_page.dart';
 import 'hidden_hives_page.dart';
@@ -25,14 +27,6 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
   void initState() {
     super.initState();
     // Initial fetch handled in build via ref.watch logic or standard FutureBuilder
-  }
-
-  Future<List<HiveModel>> _fetchFeed(List<FriendProfile> friends, List<String> mutedFriends, List<String> hiddenHiveIds) async {
-    return ref.read(firestoreServiceProvider).getFriendsFeed(
-      friends, 
-      mutedFriendIds: mutedFriends, 
-      hiddenHiveIds: hiddenHiveIds,
-    );
   }
 
   void _openHiveDetail(HiveModel hive) {
@@ -78,6 +72,8 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
           ),
           TextButton(
             onPressed: () async {
+              // Captured before the pop — the dialog's context is gone after it.
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
                 try {
                 // Optimistic Update: Hide immediately
@@ -91,8 +87,7 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
                 // Do NOT invalidate immediately to avoid jitter
                 // ref.invalidate(friendFeedProvider); 
 
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                     SnackBar(
                       content: Text('Hidden "${hive.title}"'),
                       action: SnackBarAction(
@@ -107,17 +102,14 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
                       ),
                     ),
                   );
-                }
               } catch (e) {
                 // Revert if failed
                 setState(() {
                   _temporarilyHidden.remove(hive.id);
                 });
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to hide: $e')),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Failed to hide: $e')),
+                );
               }
             },
             child: const Text('Hide', style: TextStyle(color: Colors.red)),
@@ -153,50 +145,50 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
         data: (myUser) {
           if (myUser == null) return const Center(child: Text('User not signed in'));
           
-          if (myUser.friends.isEmpty) {
-             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No friends yet',
-                    style: theme.textTheme.titleLarge?.copyWith(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Add friends from Contacts to see their Hives!'),
-                ],
-              ),
-            );
-          }
-
-          return FutureBuilder<List<HiveModel>>(
-            future: _fetchFeed(myUser.friends, myUser.mutedFriends, myUser.hiddenHiveIds),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  itemCount: 5,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (_, __) => const SkeletonHiveCard(),
-                );
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-
-              final allHives = snapshot.data ?? [];
+          // No early return on an empty friends list — a hive reached through a
+          // share link belongs here even when the two aren't friends.
+          return ref.watch(friendFeedProvider).when(
+            loading: () => ListView.separated(
+              padding: const EdgeInsets.only(bottom: 100),
+              itemCount: 5,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (_, __) => const SkeletonHiveCard(),
+            ),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (allHives) {
               // Filter out optimistically hidden hives
               final hives = allHives.where((h) => !_temporarilyHidden.contains(h.id)).toList();
 
               if (hives.isEmpty) {
-                return const Center(child: Text('No active Hives from friends yet.'));
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline,
+                            size: 72, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text('Nothing here yet',
+                            style: theme.textTheme.titleLarge
+                                ?.copyWith(color: Colors.grey)),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Add friends from Contacts, or open a hive someone '
+                          'shared with you.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
 
-              return RefreshIndicator(
+              return AppRefresh(
                 onRefresh: () async {
-                  setState(() {}); // Triggers rebuild and refetch
+                  FirestoreService.clearProfileCache();
+                  ref.invalidate(friendFeedProvider);
+                  await ref.read(friendFeedProvider.future);
                 },
                 child: ListView.builder(
                   padding: const EdgeInsets.only(bottom: 100),
@@ -220,14 +212,9 @@ class _FriendFeedPageState extends ConsumerState<FriendFeedPage> {
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                             child: Row(
                               children: [
-                                CircleAvatar(
+                                AvatarImage(
+                                  url: ownerProfile.photoUrl,
                                   radius: 16,
-                                  backgroundImage: (ownerProfile.photoUrl?.isNotEmpty ?? false)
-                                      ? CachedNetworkImageProvider(ownerProfile.photoUrl!)
-                                      : null,
-                                  child: (ownerProfile.photoUrl?.isEmpty ?? true)
-                                      ? Text(ownerProfile.displayName.characters.first.toUpperCase())
-                                      : null,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(

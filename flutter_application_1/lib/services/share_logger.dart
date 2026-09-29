@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ShareLogger {
@@ -13,9 +14,9 @@ class ShareLogger {
       final timestamp = DateTime.now().toIso8601String();
       final logMessage = '[$timestamp] $message\n-----------------------------------\n';
       await file.writeAsString(logMessage, mode: FileMode.append);
-      print("Logged to file: $message"); // Keep console log as well
+      debugPrint("Logged to file: $message"); // Keep console log as well
     } catch (e) {
-      print("Failed to write to log file: $e");
+      debugPrint("Failed to write to log file: $e");
     }
   }
 
@@ -38,7 +39,7 @@ class ShareLogger {
         await file.delete();
       }
     } catch (e) {
-      print("Failed to clear logs: $e");
+      debugPrint("Failed to clear logs: $e");
     }
   }
 }

@@ -1,0 +1,70 @@
+﻿Analyzing flutter_application_1...                              
+
+   info - 'androidProvider' is deprecated and shouldn't be used. Use providerAndroid instead. This parameter will be removed in a future major release - lib\main.dart:51:7 - deprecated_member_use
+   info - 'appleProvider' is deprecated and shouldn't be used. Use providerApple instead. This parameter will be removed in a future major release - lib\main.dart:52:7 - deprecated_member_use
+warning - Unused import: '../core/constants/app_constants.dart' - lib\pages\auth_wrapper.dart:4:8 - unused_import
+warning - Unused import: 'package:flutter_riverpod/flutter_riverpod.dart' - lib\pages\complete_profile_page.dart:4:8 - unused_import
+warning - Unused import: 'package:modal_bottom_sheet/modal_bottom_sheet.dart' - lib\pages\complete_profile_page.dart:6:8 - unused_import
+warning - The value of the local variable 'phone' isn't used - lib\pages\contacts_page.dart:128:11 - unused_local_variable
+warning - Unused import: '../services/firestore_service.dart' - lib\pages\create_hive_sheet.dart:6:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\friend_feed_page.dart:95:40 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\friend_feed_page.dart:117:40 - use_build_context_synchronously
+warning - Unused import: 'package:cached_network_image/cached_network_image.dart' - lib\pages\home_page.dart:3:8 - unused_import
+warning - Unused import: 'friend_feed_page.dart' - lib\pages\home_page.dart:25:8 - unused_import
+warning - Unused import: '../widgets/shimmer_loading.dart' - lib\pages\home_page.dart:31:8 - unused_import
+warning - The value of the field '_tabController' isn't used - lib\pages\home_page.dart:48:22 - unused_field
+warning - The value of the field '_hivesListKey' isn't used - lib\pages\home_page.dart:53:19 - unused_field
+warning - The value of the local variable 'tutorialCoachMark' isn't used - lib\pages\home_page.dart:106:28 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\home_page.dart:225:33 - deprecated_member_use
+warning - The receiver can't be null, so the null-aware operator '?.' is unnecessary - lib\pages\home_page.dart:621:61 - invalid_null_aware_operator
+warning - The operand can't be 'null', so the condition is always 'true' - lib\pages\home_page.dart:695:19 - unnecessary_null_comparison
+warning - The declaration '_signOut' isn't referenced - lib\pages\home_page.dart:723:16 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\home_page.dart:784:40 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\home_page.dart:801:40 - use_build_context_synchronously
+warning - Unused import: 'package:flutter_application_1/services/firestore_service.dart' - lib\pages\product_detail_page.dart:3:8 - unused_import
+warning - Unused import: 'package:flutter_application_1/widgets/shimmer_loading.dart' - lib\pages\product_detail_page.dart:4:8 - unused_import
+warning - Unused import: 'package:url_launcher/url_launcher.dart' - lib\pages\settings_page.dart:6:8 - unused_import
+warning - Unused import: 'package:modal_bottom_sheet/modal_bottom_sheet.dart' - lib\pages\settings_page.dart:7:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:91:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:97:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:110:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:116:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:261:49 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:267:49 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\pages\settings_page.dart:301:29 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\pages\settings_page.dart:303:38 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\settings_page.dart:368:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\pages\settings_page.dart:376:68 - deprecated_member_use
+warning - The operand can't be 'null', so the condition is always 'true' - lib\services\firestore_service.dart:671:25 - unnecessary_null_comparison
+warning - Unnecessary cast - lib\services\firestore_service.dart:672:29 - unnecessary_cast
+   info - The 'if' statement could be replaced by a null-aware assignment - lib\services\metadata_service.dart:108:11 - prefer_conditional_assignment
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:123:38 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:125:23 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:127:30 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:182:20 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:183:20 - unnecessary_non_null_assertion
+warning - The '!' will have no effect because the receiver can't be null - lib\services\metadata_service.dart:184:20 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\services\share_logger.dart:16:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\share_logger.dart:18:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\share_logger.dart:41:7 - avoid_print
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\services\update_service.dart:82:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\services\update_service.dart:113:56 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\services\update_service.dart:156:60 - deprecated_member_use
+warning - Unused import: '../core/constants/app_constants.dart' - lib\widgets\image_picker_widget.dart:4:8 - unused_import
+warning - Dead code - lib\widgets\image_picker_widget.dart:238:9 - dead_code
+  error - The argument for the named parameter 'showShadow' was already specified - lib\widgets\zoom_drawer_shell.dart:39:7 - duplicate_named_argument
+
+flutter : 53 issues found. 
+(ran in 28.1s)
+At line:1 char:1
++ flutter analyze --no-pub 
+2>&1 > cleanup_verify.txt
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (53 issues  
+   found. (ran in 28.1s):St   
+ ring) [], RemoteException
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 

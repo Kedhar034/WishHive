@@ -58,12 +58,17 @@ class _LoginPageState extends State<LoginPage> {
       );
       final user = userCredential.user;
       if (user != null) {
-        await FirestoreService().updateUser(UserModel(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? 'User',
-          photoUrl: user.photoURL,
-        ));
+        // Check if user already exists in Firestore to avoid overwriting custom profile data
+        final existingUser = await FirestoreService().getUser(user.uid);
+        
+        if (existingUser == null) {
+          await FirestoreService().updateUser(UserModel(
+            uid: user.uid,
+            email: user.email ?? '',
+            displayName: user.displayName ?? 'User',
+            photoUrl: user.photoURL,
+          ));
+        }
       }
       if (user != null) {
         if (!mounted) return;
@@ -119,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   Hero(
                     tag: 'app_logo',
-                    child: const CircularLogo(size: 100, padding: 16),
+                    child: const CircularLogo(size: 100),
                   ),
                   const SizedBox(height: 32),
                   Text(

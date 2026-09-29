@@ -1,0 +1,262 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WishHive — Firestore Security Rules
+//
+// STATUS: INTERIM / STOPGAP.
+//
+// These rules replace `allow read, write;` (fully open to the public internet)
+// with the tightest set the CURRENT app schema can tolerate. The app still
+// performs several cross-user writes, so some cross-user access must remain
+// permitted until the schema migration lands.
+//
+// Closed by these rules:
+//   - anonymous (signed-out) access, entirely
+//   - deleting another user's hives or wishes
+//   - editing another user's profile fields (email, username, photoUrl)
+//   - writing to any collection outside the known structure
+//   - a non-editor adding wishes to someone else's hive   (role now ENFORCED)
+//   - a non-owner rewriting a wish's name, price or note   (claim-only)
+//
+// STILL OPEN until the schema migration (Step 3):
+//   - any signed-in user can read any user's hives and wishes
+//         → needs `audienceIds` on a top-level `hives` collection
+//   - any signed-in user can read any user's email
+//         → needs the public/private profile split
+//   - friend-request flooding can still bloat a user document toward the 1 MiB
+//     cap  → needs `users/{uid}/friendRequests/{fromUid}` as documents
+//   - another user can still overwrite a `friends` array
+//         → needs friendship edge documents
+//
+// Note on rule evaluation: Firestore ORs all matching allow statements. A
+// request is permitted if ANY rule allows it. Access is denied by default, so
+// anything not explicitly allowed below is refused.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── helpers ────────────────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    // The only fields another user may modify on someone else's user document.
+    // Used by sendFriendRequest / acceptFriendRequest / rejectFriendRequest and
+    // by _syncUserProfileToFriends. All four write to a document they do not own.
+    function onlySocialGraphFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['friends', 'friendRequestsSent', 'friendRequestsReceived']);
+    }
+
+    // Editors of a hive, read from the hive document itself.
+    function hiveEditors(ownerId, hiveId) {
+      return get(/databases/$(database)/documents/users/$(ownerId)/hives/$(hiveId))
+               .data.get('allowedEditorIds', []);
+    }
+
+    // ─── users ──────────────────────────────────────────────────────────────
+
+    match /users/{uid} {
+
+      // Search and profile lookups now read users/{uid}/public/profile, so this
+      // no longer needs to be world-readable. What remains is the friend-graph
+      // operations, which legitimately read the other party's document:
+      // accepting a request, removing a friend, and the profile fan-out.
+      allow get: if me() == uid
+                 || exists(/databases/$(database)/documents/users/$(uid)/friends/$(me()))
+                 || exists(/databases/$(database)/documents/users/$(me())/friends/$(uid))
+                 || exists(/databases/$(database)/documents/users/$(uid)/friendRequests/$(me()))
+                 || exists(/databases/$(database)/documents/users/$(me())/friendRequests/$(uid));
+
+      // Nothing enumerates the users collection any more.
+      allow list: if false;
+
+      allow create: if me() == uid;
+      allow delete: if me() == uid;
+
+      // Owner may change anything on their own document.
+      // Anyone else may touch ONLY the three social-graph arrays.
+      allow update: if me() == uid
+                    || (signedIn() && onlySocialGraphFields());
+
+      // ─── hives ────────────────────────────────────────────────────────────
+
+      match /hives/{hiveId} {
+
+        // Required by getFriendsFeed(), which queries each friend's hives.
+        // Step 3 replaces this with:
+        //   allow read: if me() in resource.data.audienceIds;
+        allow read: if signedIn();
+
+        allow create: if me() == uid;
+        allow delete: if me() == uid;
+
+        // Owner edits freely. An editor may ONLY bump the aggregate counters,
+        // which addWishToFriendsHive() does after inserting a wish.
+        allow update: if me() == uid
+                      || (signedIn()
+                          && me() in resource.data.get('allowedEditorIds', [])
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['itemCount', 'totalCost']));
+      }
+
+      // ─── wishes ───────────────────────────────────────────────────────────
+
+      match /wishes/{wishId} {
+
+        allow read: if signedIn();
+
+        // Owner, or a friend listed as an editor on the target hive.
+        // This is the first server-side enforcement of the editor role —
+        // previously it was only a Dart getter deciding whether to draw a button.
+        allow create: if me() == uid
+                      || (signedIn()
+                          && me() in hiveEditors(uid, request.resource.data.hiveId));
+
+        // The owner, or the friend who contributed the wish.
+        allow delete: if me() == uid
+                      || me() == resource.data.get('addedByUid', '');
+
+        // Owner and contributor edit freely. Everyone else may ONLY claim or
+        // unclaim — they cannot change a wish's name, price, link or note.
+        allow update: if me() == uid
+                      || me() == resource.data.get('addedByUid', '')
+                      || (signedIn()
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen']));
+      }
+    }
+
+    // ─── NEW SCHEMA ─────────────────────────────────────────────────────────
+    // Populated by the mirror Cloud Functions. Added alongside the legacy rules
+    // above so both structures work while v1.0.3 clients are still in the wild.
+
+    match /users/{uid}/public/profile {
+      allow read: if signedIn();
+      allow write: if me() == uid;
+    }
+
+    match /users/{uid}/friends/{friendId} {
+      allow read: if me() == uid;
+      allow write: if false;                 // Cloud Functions only
+    }
+
+    match /users/{uid}/friendRequests/{fromId} {
+      allow read: if me() == uid;
+      // A sender can only ever create ONE document, named after themselves.
+      // This is what makes request flooding structurally impossible.
+      allow create: if me() == fromId
+                    && request.resource.data.keys().hasOnly(['sentAt', 'fromName']);
+      allow delete: if me() == uid || me() == fromId;
+      allow update: if false;
+    }
+
+    match /users/{uid}/sentRequests/{toId} {
+      allow read: if me() == uid;
+      allow create, delete: if me() == uid;
+      allow update: if false;
+    }
+
+    match /users/{uid}/settings/{docId} {
+      allow read, write: if me() == uid;
+    }
+
+    // Blocking is private to the blocker — the blocked user is never told.
+    match /users/{uid}/blocked/{blockedUid} {
+      allow read: if me() == uid;
+      allow create, delete: if me() == uid && blockedUid != uid;
+      allow update: if false;
+    }
+
+    // Reports are write-only for users; only moderators read them.
+    match /reports/{reportId} {
+      allow read: if false;
+      allow create: if signedIn()
+                    && request.resource.data.reporterUid == me()
+                    && request.resource.data.keys().hasOnly([
+                         'reporterUid', 'targetType', 'targetId',
+                         'targetOwnerUid', 'reason', 'details', 'createdAt'
+                       ])
+                    && request.resource.data.reason is string
+                    && request.resource.data.reason.size() <= 64
+                    && request.resource.data.get('details', '').size() <= 1000;
+      allow update, delete: if false;
+    }
+
+    match /usernames/{name} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.uid == me()
+                    && request.resource.data.keys().hasOnly(['uid']);
+      allow update: if false;                // never reassign a claimed name
+      allow delete: if resource.data.uid == me();
+    }
+
+    match /hives/{hiveId} {
+      function hiveOwner() { return resource.data.ownerId; }
+
+      allow read: if resource.data.get('isPublic', false) == true
+                  || me() in resource.data.get('audienceIds', []);
+
+      allow create: if request.resource.data.ownerId == me()
+                    && !('audienceIds' in request.resource.data);
+
+      // The owner may set shareId / linkShareEnabled. viewerIds is widened by
+      // the redeemShareLink function, which runs with admin credentials and so
+      // is not constrained here.
+      allow update: if hiveOwner() == me()
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['audienceIds', 'isPublic', 'ownerId']);
+
+      allow delete: if hiveOwner() == me();
+
+      match /wishes/{wishId} {
+        function hive() {
+          return get(/databases/$(database)/documents/hives/$(hiveId)).data;
+        }
+
+        allow read: if me() in hive().get('audienceIds', [])
+                    || hive().get('isPublic', false) == true;
+
+        allow create: if me() == hive().ownerId
+                      || me() in hive().get('editorIds', []);
+
+        allow delete: if me() == hive().ownerId
+                      || me() == resource.data.get('addedByUid', '');
+
+        allow update: if me() == hive().ownerId
+                      || me() == resource.data.get('addedByUid', '')
+                      || (me() in hive().get('audienceIds', [])
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen']));
+      }
+    }
+
+    // ─── collection-group queries ───────────────────────────────────────────
+    // Path-scoped rules above do not apply to collectionGroup() queries, which
+    // need their own recursive-wildcard match.
+
+    match /{path=**}/public/{docId} {
+      allow read: if signedIn();
+    }
+
+    // Scoped by hiveOwnerId — the query must filter on it, so a caller can only
+    // ever retrieve wishes belonging to hives they own.
+    match /{path=**}/wishes/{wishId} {
+      allow read: if resource.data.get('hiveOwnerId', '') == me();
+    }
+
+    // ─── everything else ────────────────────────────────────────────────────
+    // Explicit for clarity; Firestore denies unmatched paths by default.
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

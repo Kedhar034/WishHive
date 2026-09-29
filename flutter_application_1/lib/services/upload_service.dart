@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,6 +20,20 @@ class UploadTask {
     required this.userId,
     this.attempt = 0,
   });
+
+  Map<String, dynamic> toJson() => {
+        'wishId': wishId,
+        'localPath': localPath,
+        'userId': userId,
+        'attempt': attempt,
+      };
+
+  factory UploadTask.fromJson(Map<String, dynamic> j) => UploadTask(
+        wishId: j['wishId'] as String,
+        localPath: j['localPath'] as String,
+        userId: j['userId'] as String,
+        attempt: (j['attempt'] as num?)?.toInt() ?? 0,
+      );
 }
 
 
@@ -26,24 +42,70 @@ class UploadTask {
 /// It maintains a queue of images that need to be uploaded to Firebase Storage.
 /// Once uploaded, it updates the corresponding Firestore document with the network URL.
 class UploadService extends Notifier<List<UploadTask>> {
+  static const String _prefsKey = 'pending_uploads';
+
   @override
   List<UploadTask> build() {
+    _restore();
     return [];
   }
 
   bool _isUploading = false;
 
+  /// The queue used to live only in memory, so killing the app stranded any
+  /// in-flight upload and left the wish pointing at a local device path that
+  /// nobody else could resolve.
+  Future<void> _restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_prefsKey) ?? const [];
+      if (raw.isEmpty) return;
+
+      final restored = raw
+          .map((s) => UploadTask.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .where((t) => File(t.localPath).existsSync())
+          .toList();
+
+      if (restored.isEmpty) {
+        await prefs.remove(_prefsKey);
+        return;
+      }
+      debugPrint('[UploadService] Restored ${restored.length} pending upload(s)');
+      state = [...state, ...restored];
+      _processQueue();
+    } catch (e) {
+      debugPrint('[UploadService] Restore failed: $e');
+    }
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (state.isEmpty) {
+        await prefs.remove(_prefsKey);
+      } else {
+        await prefs.setStringList(
+          _prefsKey,
+          state.map((t) => jsonEncode(t.toJson())).toList(),
+        );
+      }
+    } catch (e) {
+      debugPrint('[UploadService] Persist failed: $e');
+    }
+  }
+
   /// Add a new upload task to the queue.
   void addToQueue(String wishId, File imageFile, String userId) {
     debugPrint('[UploadService] Adding to queue: Wish=$wishId, Path=${imageFile.path}');
-    
+
     final task = UploadTask(
       wishId: wishId,
       localPath: imageFile.path,
       userId: userId,
     );
-    
+
     state = [...state, task];
+    _persist();
     _processQueue();
   }
 
@@ -92,6 +154,8 @@ class UploadService extends Notifier<List<UploadTask>> {
       
       // 3. Update Firestore Document
       await FirebaseFirestore.instance
+          .collection('users')
+          .doc(task.userId)
           .collection('wishes')
           .doc(task.wishId)
           .update({'imageUrl': downloadUrl});
@@ -127,6 +191,9 @@ class UploadService extends Notifier<List<UploadTask>> {
             userId: task.userId,
             attempt: task.attempt + 1
          )];
+         _persist();
+         // Back off so a persistent failure does not spin the queue.
+         await Future.delayed(Duration(seconds: 2 << task.attempt));
       } else {
          debugPrint('[UploadService] Max retries reached. Giving up on ${task.wishId}');
          _removeFromQueue(task);
@@ -140,6 +207,7 @@ class UploadService extends Notifier<List<UploadTask>> {
 
   void _removeFromQueue(UploadTask task) {
     state = state.where((t) => t != task).toList();
+    _persist();
   }
 }
 

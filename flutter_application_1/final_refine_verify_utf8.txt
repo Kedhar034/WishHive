@@ -1,0 +1,63 @@
+﻿Running Gradle task 'assembleDebug'...                          
+flutter : lib/pages/menu_page.
+dart:74:34: Error: The getter 
+'ZoomDrawer' isn't defined 
+for the type 'MenuPage'.
+At line:1 char:1
++ flutter build apk --debug 
+--no-pub 2>&1 > 
+final_refine_verify.txt
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (lib/pages  
+  /menu_...ype 'MenuPage'.:   
+ String) [], RemoteExcepti    
+on
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 
+ - 'MenuPage' is from 'package
+:flutter_application_1/pages/m
+enu_page.dart' 
+('lib/pages/menu_page.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'ZoomDrawer'.
+                    onTap: () 
+=> ZoomDrawer.of(context)!.clo
+se(),
+                              
+   ^^^^^^^^^^
+Target 
+kernel_snapshot_program 
+failed: Exception
+
+
+FAILURE: Build failed with an 
+exception.
+
+* What went wrong:
+Execution failed for task ':ap
+p:compileFlutterBuildDebug'.
+> Process 'command 'D:\Flutter
+\flutter\bin\flutter.bat'' 
+finished with non-zero exit 
+value 1
+
+* Try:
+> Run with --stacktrace 
+option to get the stack trace.
+> Run with --info or --debug 
+option to get more log output.
+> Run with --scan to get full 
+insights.
+> Get more help at 
+https://help.gradle.org.
+
+BUILD FAILED in 24s
+Running Gradle task 'assembleDebug'...                             24.8s
+Gradle task assembleDebug 
+failed with exit code 1

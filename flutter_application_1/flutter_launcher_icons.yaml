@@ -4,7 +4,13 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
-  image_path: "assets/images/WishHive.png"
+  # Sources live in icon/ rather than assets/images/ so they are not bundled
+  # into the app — only the in-app logo needs to ship.
+  image_path: "icon/app_icon.png"
+  # iOS rejects an alpha channel and rounds the corners itself, so it takes the
+  # full-bleed square rather than the rounded-square source.
+  image_path_ios: "icon/app_icon_fullbleed.png"
+  remove_alpha_ios: true
   min_sdk_android: 21 # android min sdk min:16, default 21
-  adaptive_icon_background: "#FFFFFF" # Optional
-  adaptive_icon_foreground: "assets/images/WishHive.png" # Optional
+  adaptive_icon_background: "icon/app_icon_background.png"
+  adaptive_icon_foreground: "icon/app_icon_foreground.png"

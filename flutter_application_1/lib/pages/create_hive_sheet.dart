@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hive_model.dart';
-import '../services/firestore_service.dart';
 import '../services/image_storage_service.dart';
 import '../widgets/image_picker_widget.dart';
 import '../providers/providers.dart';
+import '../core/constants/app_constants.dart';
+import '../widgets/custom_snackbar.dart';
 import 'hive_access_page.dart';
 
 class CreateHiveSheet extends ConsumerStatefulWidget {
@@ -55,7 +56,10 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
   }
 
   Future<void> _pickImage() async {
-    final result = await ImagePickerWidget.pickImage(context);
+    final result = await ImagePickerWidget.pickImage(
+      context,
+      defaultImages: AppConstants.defaultImages,
+    );
     if (result != null) {
       setState(() {
         _selectedImage = result;
@@ -105,12 +109,13 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
         await ref.read(firestoreServiceProvider).updateHive(hive);
       }
 
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      CustomSnackBar.showSuccess(context, widget.hiveToEdit == null ? 'Hive created successfully!' : 'Hive updated successfully!');
+      Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to save hive: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        CustomSnackBar.showError(context, 'Failed to save hive. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -183,7 +188,13 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
                   ButtonSegment(value: HivePrivacy.specific, label: Text('Specific'), icon: Icon(Icons.person_add_outlined)),
                 ],
                 selected: {_privacy},
-                onSelectionChanged: (set) => setState(() => _privacy = set.first),
+                onSelectionChanged: (set) => setState(() {
+                  _privacy = set.first;
+                  if (_privacy != HivePrivacy.specific) {
+                    _allowedViewerIds = [];
+                    _allowedEditorIds = [];
+                  }
+                }),
               ),
               if (_privacy == HivePrivacy.specific) ...[
                 const SizedBox(height: 16),

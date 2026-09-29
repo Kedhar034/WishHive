@@ -1,0 +1,98 @@
+{
+  "indexes": [
+    {
+      "__comment__": "LEGACY getFriendsFeed() query 1 — public/friends hives per friend, newest first.",
+      "collectionGroup": "hives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "privacy",   "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment__": "LEGACY getFriendsFeed() query 2 — specific-friend hives the caller may view.",
+      "collectionGroup": "hives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "privacy",          "order": "ASCENDING" },
+        { "fieldPath": "allowedViewerIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt",        "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment__": "LEGACY wishesStream() — all wishes in one hive, newest first.",
+      "collectionGroup": "wishes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hiveId",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment__": "NEW FEED — the single query that replaces the 2N fan-out.",
+      "collectionGroup": "hives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "audienceIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment__": "onFriendshipChanged — find an owner's friends-privacy hives.",
+      "collectionGroup": "hives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "privacy", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "__comment__": "Owner's own hive list against the top-level collection, newest first.",
+      "collectionGroup": "hives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId",   "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "__comment__": "Unseen-fulfilled badge — scoped to hives the caller owns.",
+      "collectionGroup": "wishes",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "hiveOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "ownerSeen",   "order": "ASCENDING" }
+      ]
+    }
+  ],
+
+  "fieldOverrides": [
+    {
+      "__comment__": "redeemShareLink and hiveLandingPage look a hive up by its share token.",
+      "collectionGroup": "hives",
+      "fieldPath": "shareId",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "__comment__": "searchUsers does a collectionGroup query over public profiles. Single-field indexes are collection-scoped by default, so the group scope has to be requested explicitly here rather than as a composite index.",
+      "collectionGroup": "public",
+      "fieldPath": "username",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "__comment__": "onHiveDeleteCleanHidden scans every user's settings document for the deleted hive id.",
+      "collectionGroup": "settings",
+      "fieldPath": "hiddenHiveIds",
+      "indexes": [
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" },
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION_GROUP" }
+      ]
+    }
+  ]
+}

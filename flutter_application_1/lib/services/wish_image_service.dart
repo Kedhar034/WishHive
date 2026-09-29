@@ -6,28 +6,29 @@
 class WishImageService {
   WishImageService._();
 
-  // ─── Category image URLs (Unsplash free source) ──────────────────────────
+  // ─── Category image URLs (Local Assets) ────────────────────────────────────
 
-  static const String _shopping =
-      'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&q=70';
-  static const String _food =
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&q=70';
-  static const String _travel =
-      'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=400&q=70';
-  static const String _gift =
-      'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400&q=70';
-  static const String _tech =
-      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=400&q=70';
-  static const String _books =
-      'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&q=70';
-  static const String _beauty =
-      'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&q=70';
-  static const String _sports =
-      'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&q=70';
-  static const String _flowers =
-      'https://images.unsplash.com/photo-1490750967868-88df5691cc60?w=400&q=70';
-  static const String _default =
-      'https://images.unsplash.com/photo-1513885535751-8b9238bd345a?w=400&q=70'; // star/wish
+  static const String _shopping = 'assets/categories/shoppin.jpeg';
+  static const String _food = 'assets/categories/Foo.jpeg';
+  static const String _travel = 'assets/categories/Trave.jpeg';
+  static const String _gift = 'assets/categories/Gift.jpeg';
+  static const String _tech = 'assets/categories/Tec.jpeg';
+  static const String _books = 'assets/categories/Book.jpeg';
+  static const String _beauty = 'assets/categories/Beaut.jpeg';
+  static const String _sports = 'assets/categories/Sport.jpeg';
+  static const String _flowers = 'assets/categories/Flower.jpeg';
+  static const String _gaming = 'assets/categories/Gamin.jpeg';
+  static const String _movie = 'assets/categories/Movie.jpeg';
+  static const String _music = 'assets/categories/Musi.jpeg';
+  static const String _party = 'assets/categories/Part.jpeg';
+  static const String _fitness = 'assets/categories/Fitnes.jpeg';
+  static const String _anniversary = 'assets/categories/anniversary.jpeg';
+  static const String _bike = 'assets/categories/bike.jpeg';
+  static const String _jewellery = 'assets/categories/jwellery.jpeg';
+  static const String _pet = 'assets/categories/pet.jpeg';
+  static const String _wedding = 'assets/categories/wedding.jpeg';
+  
+  static const String _default = 'assets/categories/Gift.jpeg';
 
   // ─── Keyword maps ──────────────────────────────────────────────────────────
 
@@ -35,9 +36,7 @@ class WishImageService {
     'shirt', 'dress', 'shoes', 'jeans', 'pant', 'jacket', 'clothes', 'cloth',
     'fashion', 'wear', 'amazon', 'flipkart', 'myntra', 'ajio', 'nykaa fashion',
     'meesho', 'cart', 'buy', 'purchase', 'order', 'shopping', 'accessory',
-    'accessories', 'bag', 'wallet', 'watch', 'jewel', 'tops', 'kurti', 'saree', 'frock', 'ethnic', 
-    'ethnic wear', 'ethnic wear for women', 'ethnic wear for men', 'ethnic wear for girls', 'ethnic wear for boys',
-    'ethnic wear for women', 'ethnic wear for men', 'ethnic wear for girls', 'ethnic wear for boys', 'ethnic wear for women', 'ethnic wear for men', 'ethnic wear for girls', 'ethnic wear for boys',       
+    'accessories', 'bag', 'wallet', 'watch', 'tops', 'kurti', 'saree', 'frock', 'ethnic',
   ];
 
   static const _foodKeywords = [
@@ -55,8 +54,8 @@ class WishImageService {
   ];
 
   static const _giftKeywords = [
-    'gift', 'surprise', 'birthday', 'present', 'celebration', 'anniversary',
-    'wedding', 'festive', 'christmas', 'diwali', 'eid', 'valentine',
+    'gift', 'surprise', 'birthday', 'present', 'celebration',
+    'festive', 'christmas', 'diwali', 'eid', 'valentine',
     'hamper', 'bouquet with', 'greeting'
   ];
 
@@ -81,15 +80,55 @@ class WishImageService {
   ];
 
   static const _sportsKeywords = [
-    'sport', 'gym', 'fitness', 'cricket', 'football', 'tennis', 'basketball',
-    'badminton', 'cycling', 'bike', 'yoga', 'pilates', 'running', 'sneaker',
-    'nike', 'adidas', 'puma', 'reebok', 'decathlon', 'gear', 'equipment',
-    'dumbbell', 'protein'
+    'sport', 'cricket', 'football', 'tennis', 'basketball',
+    'badminton', 'running', 'sneaker', 'nike', 'adidas', 'puma', 'reebok', 
+    'decathlon', 'gear', 'equipment'
+  ];
+
+  static const _fitnessKeywords = [
+    'gym', 'fitness', 'yoga', 'pilates', 'dumbbell', 'protein', 'workout', 'exercise'
   ];
 
   static const _flowersKeywords = [
     'flower', 'bouquet', 'rose', 'plant', 'succulent', 'lily', 'orchid',
     'tulip', 'daisy', 'floral', 'garden', 'nursery', 'bonsai', 'pot'
+  ];
+
+  static const _gamingKeywords = [
+    'game', 'gaming', 'playstation', 'xbox', 'nintendo', 'steam', 'console',
+    'controller', 'video game'
+  ];
+
+  static const _movieKeywords = [
+    'movie', 'cinema', 'film', 'theater', 'netflix', 'prime', 'ticket'
+  ];
+
+  static const _musicKeywords = [
+    'music', 'song', 'spotify', 'concert', 'guitar', 'piano', 'instrument'
+  ];
+
+  static const _partyKeywords = [
+    'party', 'club', 'dj', 'dance', 'event'
+  ];
+
+  static const _anniversaryKeywords = [
+    'anniversary', 'wedding anniversary'
+  ];
+
+  static const _bikeKeywords = [
+    'bike', 'motorcycle', 'scooter', 'riding', 'helmet'
+  ];
+
+  static const _jewelleryKeywords = [
+    'jewellery', 'jewelry', 'necklace', 'ring', 'earring', 'bracelet', 'gold', 'silver', 'diamond'
+  ];
+
+  static const _petKeywords = [
+    'pet', 'dog', 'cat', 'animal', 'puppy', 'kitten', 'pet food'
+  ];
+
+  static const _weddingKeywords = [
+    'wedding', 'marriage', 'bride', 'groom', 'bridal'
   ];
 
   // ─── Public API ──────────────────────────────────────────────────────────
@@ -101,12 +140,22 @@ class WishImageService {
 
     if (_anyMatch(text, _foodKeywords)) return _food;
     if (_anyMatch(text, _travelKeywords)) return _travel;
-    if (_anyMatch(text, _giftKeywords)) return _gift;
     if (_anyMatch(text, _techKeywords)) return _tech;
     if (_anyMatch(text, _booksKeywords)) return _books;
     if (_anyMatch(text, _beautyKeywords)) return _beauty;
+    if (_anyMatch(text, _gamingKeywords)) return _gaming;
+    if (_anyMatch(text, _movieKeywords)) return _movie;
+    if (_anyMatch(text, _musicKeywords)) return _music;
+    if (_anyMatch(text, _partyKeywords)) return _party;
+    if (_anyMatch(text, _fitnessKeywords)) return _fitness;
     if (_anyMatch(text, _sportsKeywords)) return _sports;
     if (_anyMatch(text, _flowersKeywords)) return _flowers;
+    if (_anyMatch(text, _anniversaryKeywords)) return _anniversary;
+    if (_anyMatch(text, _weddingKeywords)) return _wedding;
+    if (_anyMatch(text, _bikeKeywords)) return _bike;
+    if (_anyMatch(text, _jewelleryKeywords)) return _jewellery;
+    if (_anyMatch(text, _petKeywords)) return _pet;
+    if (_anyMatch(text, _giftKeywords)) return _gift;
     if (_anyMatch(text, _shoppingKeywords)) return _shopping;
 
     return _default;

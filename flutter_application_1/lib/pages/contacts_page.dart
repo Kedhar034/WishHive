@@ -6,6 +6,9 @@ import 'package:share_plus/share_plus.dart';
 import '../models/user_model.dart';
 import '../providers/providers.dart';
 import '../widgets/avatar_image.dart';
+import '../widgets/report_sheet.dart';
+import '../widgets/app_refresh.dart';
+import '../services/firestore_service.dart';
 import '../core/theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 
@@ -125,7 +128,6 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
   }
 
   void _inviteContact(Contact contact) {
-    final phone = contact.phones.isNotEmpty ? contact.phones.first.number : '';
     final name = contact.displayName;
     final inviteText = 'Hey $name! 🐝 Join me on WishHive — the app to organize & share your wishlists with friends. Download it here: https://play.google.com/store/apps/details?id=com.wishhive.app';
     
@@ -181,6 +183,80 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _removeFriend(String friendUid, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove friend?'),
+        content: Text(
+          '$name will be removed from your friends.\n\n'
+          "You will no longer see each other's hives, and any access you gave "
+          'them to specific hives will be revoked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (confirmed != true) return;
+    try {
+      await ref.read(firestoreServiceProvider).removeFriend(friendUid);
+      ref.invalidate(friendFeedProvider);
+      messenger.showSnackBar(SnackBar(content: Text('Removed $name')));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not remove friend: $e')),
+      );
+    }
+  }
+
+  void _cancelRequest(String targetUid, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel request?'),
+        content: Text('Withdraw your friend request to $name?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep it'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel request',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(firestoreServiceProvider).cancelFriendRequest(targetUid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Request cancelled')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not cancel: $e')),
+        );
       }
     }
   }
@@ -318,7 +394,9 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
       return true;
     }).toList();
 
-    return CustomScrollView(
+    return AppRefresh(
+      child: CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         // ─── Friends Section ───────────────────────────────────
         if (friends.isNotEmpty) ...[
@@ -343,7 +421,43 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
                   leading: AvatarImage(url: friend.photoUrl),
                   title: Text(friend.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(friend.email),
-                  trailing: Icon(Icons.check_circle, color: AppTheme.success, size: 20),
+                  trailing: PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    onSelected: (value) {
+                      if (value == 'remove') {
+                        _removeFriend(friend.uid, friend.displayName);
+                      } else if (value == 'report') {
+                        ReportSheet.show(
+                          context,
+                          targetType: 'user',
+                          targetId: friend.uid,
+                          targetOwnerUid: friend.uid,
+                          targetLabel: friend.displayName,
+                        );
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'remove',
+                        child: ListTile(
+                          leading: Icon(Icons.person_remove_outlined),
+                          title: Text('Remove friend'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'report',
+                        child: ListTile(
+                          leading: Icon(Icons.flag_outlined),
+                          title: Text('Report'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
               childCount: friends.length,
@@ -483,6 +597,12 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
         // Bottom padding for nav bar
         const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
       ],
+      ),
+      onRefresh: () async {
+        FirestoreService.clearProfileCache();
+        await _loadPhoneContacts();
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -524,10 +644,24 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
             leading: AvatarImage(url: user.photoUrl),
             title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(subtitle),
+            onLongPress: () => ReportSheet.show(
+              context,
+              targetType: 'user',
+              targetId: user.uid,
+              targetOwnerUid: user.uid,
+              targetLabel: displayName,
+            ),
             trailing: isFriend
                 ? const Icon(Icons.check_circle, color: Colors.green)
                 : isPending
-                    ? const Text('Sent', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))
+                    ? TextButton(
+                        onPressed: () => _cancelRequest(user.uid, displayName),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey[600],
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        child: const Text('Sent · Cancel'),
+                      )
                     : hasReceived
                         ? ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor, foregroundColor: Colors.white),
@@ -548,9 +682,10 @@ class _ContactsPageState extends ConsumerState<ContactsPage> with SingleTickerPr
       return const Center(child: Text('No pending requests'));
     }
 
-    return RefreshIndicator(
+    return AppRefresh(
       onRefresh: () async {
-        setState(() {});
+        FirestoreService.clearProfileCache();
+        if (mounted) setState(() {});
       },
       child: FutureBuilder<List<UserModel>>(
         key: ValueKey(requestIds.join(',')), 

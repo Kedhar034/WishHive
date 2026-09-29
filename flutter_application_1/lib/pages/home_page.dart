@@ -1,6 +1,4 @@
-import 'package:flutter_zoom_drawer/flutter_zoom_drawer.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,21 +12,23 @@ import 'package:shimmer/shimmer.dart';
 
 import '../models/hive_model.dart';
 import '../providers/providers.dart';
+import '../services/share_link_service.dart';
+import '../services/share_link_flow.dart';
 import '../widgets/hive_card.dart';
+import '../widgets/app_refresh.dart';
+import '../services/firestore_service.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_theme.dart';
 import 'product_detail_page.dart';
 import 'create_hive_sheet.dart';
 import 'create_wish_sheet.dart';
-import 'welcome_page.dart';
 import 'contacts_page.dart';
-import 'friend_feed_page.dart';
 import 'hidden_hives_page.dart';
 import 'marketplace_page.dart';
 import 'settings_page.dart';
+import 'menu_page.dart';
 import '../services/metadata_service.dart';
 import '../services/share_logger.dart'; // Import ShareLogger
-import '../widgets/shimmer_loading.dart';
 import '../l10n/app_localizations.dart';
 import '../services/review_service.dart';
 import '../widgets/circular_logo.dart';
@@ -45,11 +45,13 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   late StreamSubscription _intentDataStreamSubscription;
   bool _isHandlingShare = false;
   bool _isInitialLoad = true;
-  late TabController _tabController; // Declared TabController
+
+  // Scaffold Key for Drawer control
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Tutorial Keys
+  final GlobalKey _menuKey = GlobalKey();
   final GlobalKey _fabKey = GlobalKey();
-  final GlobalKey _hivesListKey = GlobalKey(); // To be assigned to the Hive List Sliver
   final GlobalKey _hiddenHivesKey = GlobalKey(); // To be assigned to the Hidden Hives Icon
 
   @override
@@ -91,120 +93,154 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   }
 
   void _peekMenu() {
-    final drawer = ZoomDrawer.of(context);
-    if (drawer == null) return;
-    
-    // Briefly open and then close the menu to showcase the 3D shift
-    drawer.open();
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) drawer.close();
+    // Standard drawer peeking is less common, but we can simulate a brief open/close
+    _scaffoldKey.currentState?.openDrawer();
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) Navigator.of(context).pop();
     });
   }
 
   void _showTutorial() {
-    late TutorialCoachMark tutorialCoachMark;
-    
-    List<TargetFocus> targets = [];
+  
+  List<TargetFocus> targets = [];
 
-    // Target 1: Create Hive (FAB)
-    targets.add(
-      TargetFocus(
-        identify: "create_hive",
-        keyTarget: _fabKey,
-        alignSkip: Alignment.topRight,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            builder: (context, controller) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    "Navigate the Hive",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 20.0,
-                    ),
+  // Target 1: Create Hive (FAB) - Optional depending on menu
+  targets.add(
+    TargetFocus(
+      identify: "create_hive",
+      keyTarget: _fabKey,
+      alignSkip: Alignment.topRight,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: const [
+                Text(
+                  "Create a Wish",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 22.0,
                   ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 10.0),
-                    child: Text(
-                      "We've moved things around! Tap this icon (or swipe from the right) to access your Friends, Marketplace, and Settings.",
-                      style: TextStyle(color: Colors.white),
-                    ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: 10.0),
+                  child: Text(
+                    "Tap here to quickly add a new wish or create a new Hive category!",
+                    style: TextStyle(color: Colors.white, fontSize: 16.0),
+                    textAlign: TextAlign.right,
                   ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 
-    // Target 2: Hidden Hives Icon
-    targets.add(
-      TargetFocus(
-        identify: "hidden_hives",
-        keyTarget: _hiddenHivesKey,
-        alignSkip: Alignment.bottomLeft,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            builder: (context, controller) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right side if icon is on right
-                children: const [
-                  Text(
-                    "Hidden Hives",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontSize: 20.0,
-                    ),
+  // Target 2: Side Menu (New Navigation)
+  targets.add(
+    TargetFocus(
+      identify: "side_menu",
+      keyTarget: _menuKey,
+      alignSkip: Alignment.bottomLeft,
+      contents: [
+        TargetContent(
+          align: ContentAlign.bottom,
+          builder: (context, controller) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: const [
+                Text(
+                  "Explore the Hive",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 22.0,
                   ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 10.0),
-                    child: Text(
-                      "If you hide any friend's hive, you can find them here. Tap the crossed eye icon to manage hidden content.",
-                      style: TextStyle(color: Colors.white),
-                    ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: 10.0),
+                  child: Text(
+                    "Tap this icon or simply swipe from the left edge to access your Friends, Marketplace, and Settings.",
+                    style: TextStyle(color: Colors.white, fontSize: 16.0),
+                    textAlign: TextAlign.right,
                   ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 
-    // Removed bottom nav targets since they are now in the side menu
+  // Target 3: Hidden Hives Icon
+  targets.add(
+    TargetFocus(
+      identify: "hidden_hives",
+      keyTarget: _hiddenHivesKey,
+      alignSkip: Alignment.bottomLeft,
+      contents: [
+        TargetContent(
+          align: ContentAlign.bottom,
+          builder: (context, controller) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: const [
+                Text(
+                  "Hidden Hives",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 22.0,
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: 10.0),
+                  child: Text(
+                    "Any hives or friends you hide will appear here. Tap the crossed-eye icon to review them anytime.",
+                    style: TextStyle(color: Colors.white, fontSize: 16.0),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    ),
+  );
 
-    tutorialCoachMark = TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.black.withOpacity(0.8),
-      textSkip: "SKIP",
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () async {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('has_seen_tutorial_${user.uid}', true);
-        }
-      },
-      onSkip: () {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          SharedPreferences.getInstance().then((prefs) => 
-            prefs.setBool('has_seen_tutorial_${user.uid}', true));
-        }
-        return true; 
-      },
-    )..show(context: context);
-  }
+  TutorialCoachMark(
+    targets: targets,
+    colorShadow: Colors.black.withValues(alpha: 0.85),
+    textSkip: "SKIP",
+    paddingFocus: 10,
+    opacityShadow: 0.85,
+    onFinish: () async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('has_seen_tutorial_${user.uid}', true);
+      }
+    },
+    onSkip: () {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        SharedPreferences.getInstance().then((prefs) => 
+          prefs.setBool('has_seen_tutorial_${user.uid}', true));
+      }
+      return true; 
+    },
+  ).show(context: context);
+}
 
   @override
   void dispose() {
@@ -230,6 +266,30 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   }
 
   // ... (rest of methods) ...
+
+  /// Manual refresh. The lists are already live, so this mainly re-reads the
+  /// cached public profiles and gives the user visible feedback.
+  Future<void> _refreshHome() async {
+    FirestoreService.clearProfileCache();
+    ref.invalidate(friendFeedProvider);
+    ref.invalidate(hiveListProvider);
+    ref.invalidate(unseenWishesByHiveProvider);
+    await ref.read(friendFeedProvider.future);
+  }
+
+  /// Fraction of the screen width that opens the menu on a left swipe.
+  ///
+  /// Was a flat 220px — over half the screen on a typical phone, which meant
+  /// horizontal drags in the friends carousel opened the drawer instead of
+  /// scrolling. A proportion scales correctly across phones and tablets.
+  /// Raising this makes the menu easier to open and leaves less room to scroll
+  /// the carousel; lowering it does the reverse.
+  static const double _drawerDragFraction = 0.35;
+
+  static double _drawerDragWidth(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return media.size.width * _drawerDragFraction + media.padding.left;
+  }
 
   Widget _buildHomeContent(AsyncValue<QuerySnapshot> hiveList, ThemeData theme) {
     // Show skeletons during initial load for smooth transition from login
@@ -422,6 +482,14 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
     final currentNavIndex = ref.watch(navigationProvider);
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: MenuPage(
+        onPageSelected: (index) {
+          ref.read(navigationProvider.notifier).setIndex(index);
+        },
+      ),
+      drawerEdgeDragWidth: _drawerDragWidth(context),
+      drawerEnableOpenDragGesture: true,
       extendBody: true,
       body: SafeArea(
         top: true,
@@ -433,43 +501,26 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
               child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const CircularLogo(size: 40, padding: 6, showShadow: false),
-                      const SizedBox(width: 12),
-                      Text(
-                        AppConstants.appName,
-                        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  // Menu Toggle Icon (Right Side)
+                  // App Name and Logo (Left Side) - Now redirects to Home
                   GestureDetector(
-                    key: _fabKey, // Temporary key for tutorial until we update it
                     onTap: () {
-                      ZoomDrawer.of(context)!.toggle();
+                      ref.read(navigationProvider.notifier).setIndex(0);
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryAmber,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryAmber.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                    child: Row(
+                      children: [
+                        const CircularLogo(size: 40, showShadow: false),
+                        const SizedBox(width: 12),
+                        Text(
+                          AppConstants.appName,
+                          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
-                      child: const Icon(Icons.menu_open, color: Colors.white, size: 24),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Hidden Hives Icon
+                  const Spacer(),
+                  // Hidden Hives Icon (beside menu)
                   GestureDetector(
                     key: _hiddenHivesKey,
                     onTap: () {
@@ -495,6 +546,70 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
                           color: Theme.of(context).colorScheme.onSurface),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  // Menu Toggle Icon (Right Side)
+                  GestureDetector(
+                    key: _menuKey,
+                    onTap: () {
+                      _scaffoldKey.currentState?.openDrawer();
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryAmber,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryAmber.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.menu, color: Colors.white, size: 24),
+                        ),
+                        // Notification Badge for Side Menu
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final user = ref.watch(currentUserStreamProvider).value;
+                            final requestCount = user?.friendRequestsReceived.length ?? 0;
+                            final unseenCount = ref.watch(unseenFulfilledCountProvider).value ?? 0;
+                            final totalCount = requestCount + unseenCount;
+                            
+                            if (totalCount == 0) return const SizedBox.shrink();
+                            
+                            return Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  '$totalCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -504,7 +619,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
               child: IndexedStack(
                 index: currentNavIndex,
                 children: [
-                   _buildHomeContent(ref.watch(hiveListProvider), Theme.of(context)),
+                   AppRefresh(
+                     onRefresh: _refreshHome,
+                     child: _buildHomeContent(
+                         ref.watch(hiveListProvider), Theme.of(context)),
+                   ),
                    const ContactsPage(),
                    const MarketplacePage(),
                    const SettingsPage(),
@@ -546,158 +665,158 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
   // No changes needed here, just deleting the duplicate block. But I must provide valid content for _handleSharedFiles first.
   
   Future<void> _handleSharedFiles(List<SharedMediaFile> files) async {
-    if (_isHandlingShare) return;
-    _isHandlingShare = true;
+  if (_isHandlingShare) return;
+  _isHandlingShare = true;
 
-    String? foundUrl;
-    String? foundImage;
-    String? foundText;
+  String? foundUrl;
+  String? foundImage;
+  String? foundText;
 
-    // URL regex: In Dart raw strings (r'...'), backslash is NOT doubled.
-    final urlRegExp = RegExp(
-      r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)',
-      caseSensitive: false,
-    );
+  // URL regex: In Dart raw strings (r'...'), backslash is NOT doubled.
+  final urlRegExp = RegExp(
+    r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)',
+    caseSensitive: false,
+  );
 
-    // Debug: Log all shared content
-    try {
-       await ShareLogger.log('--- NEW SHARE RECEIVED ---');
-       for (int i = 0; i < files.length; i++) {
-         final logMsg = 'SharedFile[$i]: type=${files[i].type.value}, path="${files[i].path}", mimeType=${files[i].mimeType}, message=${files[i].message}';
-         debugPrint(logMsg);
-         await ShareLogger.log(logMsg);
-       }
-    } catch (e) {
-      debugPrint("Logging error: $e");
-    }
+  // Debug: Log all shared content
+  try {
+     await ShareLogger.log('--- NEW SHARE RECEIVED ---');
+     for (int i = 0; i < files.length; i++) {
+       final logMsg = 'SharedFile[$i]: type=${files[i].type.value}, path="${files[i].path}", mimeType=${files[i].mimeType}, message=${files[i].message}';
+       debugPrint(logMsg);
+       await ShareLogger.log(logMsg);
+     }
+  } catch (e) {
+    debugPrint("Logging error: $e");
+  }
 
-    // Iterate through all shared content
-    for (final file in files) {
-      final content = file.path;
-      final message = file.message ?? '';
-      
-      if (file.type == SharedMediaType.url) {
-        foundUrl ??= content;
-      } else if (file.type == SharedMediaType.text || file.type == SharedMediaType.file) {
-        if (foundText == null || content.length > (foundText?.length ?? 0)) {
-          foundText = content;
-        }
-        
-        // Try extract URL from text
-        if (foundUrl == null) {
-          final matches = urlRegExp.allMatches(content);
-          for (final match in matches) {
-            final val = match.group(0);
-            if (val != null) {
-               foundUrl = val;
-               break; 
-            }
-          }
-        }
-      } else if (file.type == SharedMediaType.image) {
-        foundImage ??= content; 
-      }
-      
-      // Fallback Checks
-      if (foundUrl == null && content.isNotEmpty) {
-         final matchesContent = urlRegExp.allMatches(content);
-         for (final match in matchesContent) {
-            final val = match.group(0);
-            if (val != null) {
-               foundUrl = val;
-               break;
-            }
-         }
-      }
-
-      if (foundUrl == null && message.isNotEmpty) {
-         final matchesMessage = urlRegExp.allMatches(message);
-         for (final match in matchesMessage) {
-            final val = match.group(0);
-            if (val != null) {
-               foundUrl = val;
-               break;
-            }
-         }
-         if (foundText == null && message.length > 5) {
-            foundText = message;
-         }
-      }
-    }
-
-    // Fallback if no URL found in loop but inside text
-    if (foundUrl == null && foundText != null) {
-         final matches = urlRegExp.allMatches(foundText);
-         for (final match in matches) {
-            final val = match.group(0);
-            if (val != null) {
-                foundUrl = val;
-                break;
-            }
-         }
-    }
-
-    String? initialTitle;
-    String? initialImage = foundImage; 
-    String? finalUrl = foundUrl;
+  // First Pass: Try to find explicit URL and Image from structured intents
+  for (final file in files) {
+    final content = file.path;
     
-    await ShareLogger.log('Processing Share: URL=$finalUrl, Image=$initialImage, Text=$foundText');
-
-    if (finalUrl != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fetching product details...')),
-        );
+    if (file.type == SharedMediaType.url && foundUrl == null) {
+      foundUrl = content;
+    } else if (file.type == SharedMediaType.image && foundImage == null) {
+      foundImage = content; // Grab the FIRST image
+    } else if (file.type == SharedMediaType.text || file.type == SharedMediaType.file) {
+      if (foundText == null || content.length > foundText.length) {
+        foundText = content;
       }
+    }
+  }
 
-      final metadata = await MetadataService.extract(finalUrl);
-      if (metadata != null) {
-        String? title = metadata.title;
-        if (title != null && title.length > 50) {
-          title = '${title.substring(0, 50)}...';
-        }
-        initialTitle = title;
-        if (metadata.imageUrl?.isNotEmpty ?? false) {
-          initialImage = metadata.imageUrl;
-        }
-      }
-    } else {
-        initialTitle = foundText;
+  // Second Pass: If no explicit URL found, parse text/messages using regex
+  for (final file in files) {
+    if (foundUrl != null) break;
+
+    final content = file.path;
+    final message = file.message ?? '';
+
+    // Check content text
+    if (content.isNotEmpty) {
+       final matchesContent = urlRegExp.allMatches(content);
+       for (final match in matchesContent) {
+          final val = match.group(0);
+          if (val != null) {
+             foundUrl = val;
+             break;
+          }
+       }
     }
 
+    // Check message text
+    if (foundUrl == null && message.isNotEmpty) {
+       final matchesMessage = urlRegExp.allMatches(message);
+       for (final match in matchesMessage) {
+          final val = match.group(0);
+          if (val != null) {
+             foundUrl = val;
+             break;
+          }
+       }
+       if (foundText == null && message.length > 5) {
+          foundText = message;
+       }
+    }
+  }
+
+  // Final Fallback: Check the accumulated text variable
+  if (foundUrl == null && foundText != null) {
+       final matches = urlRegExp.allMatches(foundText);
+       for (final match in matches) {
+          final val = match.group(0);
+          if (val != null) {
+              foundUrl = val;
+              break;
+          }
+       }
+  }
+
+  String? initialTitle;
+  String? initialImage = foundImage;
+  double? initialCost;
+  List<String>? initialImages;
+  String? finalUrl = foundUrl;
+  
+  await ShareLogger.log('Processing Share: URL=$finalUrl, Image=$initialImage, Text=$foundText');
+
+  // A WishHive share link is an invitation to view a hive, not a product to add
+  // to one. Without this the SEND/text intent filter swallows our own links and
+  // turns them into a wish.
+  if (finalUrl != null) {
+    final shareId = ShareLinkService.shareIdFrom(Uri.tryParse(finalUrl) ?? Uri());
+    if (shareId != null) {
+      _isHandlingShare = false;
+      if (mounted) await openSharedHive(context, ref, shareId);
+      return;
+    }
+  }
+
+  if (finalUrl != null) {
     if (mounted) {
-      _isHandlingShare = false;
-      showMaterialModalBottomSheet(
-        context: context,
-        expand: false,
-        builder: (context) => CreateWishSheet(
-          initialLink: finalUrl,
-          initialTitle: initialTitle,
-          initialImageUrl: initialImage,
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fetching product details...')),
       );
-    } else {
-      _isHandlingShare = false;
     }
+
+    final metadata = await MetadataService.extract(finalUrl);
+    if (metadata != null) {
+      String title = metadata.title;
+      // Truncate to a reasonable length if needed, or leave it intact.
+      if (title.length > 80) {
+        title = '${title.substring(0, 80)}...';
+      }
+      initialTitle = title;
+      // Prefer extracted metadata image if one exists, fallback to intent image
+      if (metadata.imageUrl?.isNotEmpty ?? false) {
+        initialImage = metadata.imageUrl;
+      }
+      if (metadata.hasPrice) initialCost = metadata.price;
+      if (metadata.images.length > 1) initialImages = metadata.images;
+    }
+  } else {
+      // If no URL but we got text, set title to text
+      initialTitle = foundText;
   }
 
-  Future<void> _signOut() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const WelcomePage()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign-out failed: $e')),
-        );
-      }
-    }
+  if (mounted) {
+    _isHandlingShare = false;
+    showMaterialModalBottomSheet(
+      context: context,
+      expand: false,
+      builder: (context) => CreateWishSheet(
+        initialLink: finalUrl,
+        initialTitle: initialTitle,
+        initialImageUrl: initialImage,
+        initialCost: initialCost,
+        initialImages: initialImages,
+      ),
+    );
+  } else {
+    _isHandlingShare = false;
   }
+}
+
 
   void _showCreateHiveSheet() {
     showMaterialModalBottomSheet(
@@ -737,12 +856,13 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
           ),
           TextButton(
             onPressed: () async {
+              // Captured before the pop — the dialog's context is gone after it.
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
               try {
                 ref.read(temporarilyHiddenHivesProvider.notifier).add(hive.id);
                 await ref.read(firestoreServiceProvider).hideHive(hive.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                     SnackBar(
                       content: Text('Hidden "${hive.title}"'),
                       action: SnackBarAction(
@@ -755,14 +875,11 @@ class _HomePageState extends ConsumerState<HomePage> with SingleTickerProviderSt
                       ),
                     ),
                   );
-                }
               } catch (e) {
                 ref.read(temporarilyHiddenHivesProvider.notifier).remove(hive.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to hide: $e')),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Failed to hide: $e')),
+                );
               }
             },
             child: const Text('Hide', style: TextStyle(color: Colors.red)),

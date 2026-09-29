@@ -5,9 +5,17 @@ import '../services/firestore_service.dart';
 import '../models/wish_model.dart';
 import '../models/user_model.dart';
 import '../models/hive_model.dart'; // Add this import
-import '../services/upload_service.dart'; // Add this import
+import '../services/upload_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 export '../services/upload_service.dart';
+
+// ─── App Info Providers ──────────────────────────────────────────────
+
+final appVersionProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return "v${info.version} • ${info.buildNumber}";
+});
 
 // ─── Firebase Auth Providers ────────────────────────────────────────
 
@@ -15,7 +23,7 @@ final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instan
 
 /// Auth state changes stream provider.
 final authStateProvider = StreamProvider<User?>((ref) {
-  return ref.watch(firebaseAuthProvider).idTokenChanges();
+  return ref.watch(firebaseAuthProvider).authStateChanges();
 });
 
 /// UID provider for the currently authenticated user.
@@ -74,15 +82,16 @@ final wishesByHiveProvider = StreamProvider.autoDispose.family<List<WishModel>, 
 
 // ─── Friend Feed Provider ───────────────────────────────────────────
 
-final friendFeedProvider = FutureProvider.autoDispose<List<HiveModel>>((ref) async {
+/// Live — see [FirestoreService.feedStream]. Access changes made by a Cloud
+/// Function arrive on their own, with no refresh or restart.
+final friendFeedProvider = StreamProvider.autoDispose<List<HiveModel>>((ref) {
   final user = ref.watch(currentUserStreamProvider).value;
-  if (user == null || user.friends.isEmpty) return [];
-  
-  return ref.read(firestoreServiceProvider).getFriendsFeed(
-    user.friends, 
-    mutedFriendIds: user.mutedFriends,
-    hiddenHiveIds: user.hiddenHiveIds,
-  );
+  if (user == null) return Stream.value(const <HiveModel>[]);
+
+  return ref.read(firestoreServiceProvider).feedStream(
+        mutedFriendIds: user.mutedFriends,
+        hiddenHiveIds: user.hiddenHiveIds,
+      );
 });
 
 // ─── Upload Service Provider ────────────────────────────────────────

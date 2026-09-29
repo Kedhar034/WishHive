@@ -1,0 +1,41 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WishHive — Cloud Storage Security Rules
+//
+// Uploads are written by ImageStorageService.uploadImage() to:
+//     users/{userId}/wishes/{uuid}.{ext}
+//
+// Reads must stay open to any signed-in user for now, because wish image URLs
+// appear in friends' feeds and there is no way to check hive membership from
+// Storage rules without duplicating the access list. Step 3 narrows this once
+// `audienceIds` exists.
+//
+// Writes are restricted to the owner's own path, with a size cap and a content
+// type check enforced server-side — the client currently performs no validation
+// at all before uploading.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Wish and profile images.
+    match /users/{userId}/{folder}/{fileName} {
+
+      allow read: if request.auth != null;
+
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // Everything else is denied.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

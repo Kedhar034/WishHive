@@ -50,6 +50,30 @@
       },
       "oauth_client": [
         {
+          "client_id": "371898205121-4gs4cbmp55fjtosfcajrnqe4fbup8jp9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wishhive.app",
+            "certificate_hash": "6ac31ab424576dfb757343a5651c5c1f275546d3"
+          }
+        },
+        {
+          "client_id": "371898205121-7q59hmkfg14gisokdnpf65dmftqfq22o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wishhive.app",
+            "certificate_hash": "4625eed182cfe5b8947e7d27842620ce2e45b332"
+          }
+        },
+        {
+          "client_id": "371898205121-kglk6oopf7ma4h5r5gvtvtn6dlsoq3mb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wishhive.app",
+            "certificate_hash": "69c2769cb69222fd83db7b1897085743f3f02632"
+          }
+        },
+        {
           "client_id": "371898205121-7in762okpr7hr6mnp0itkqc4fptd5fce.apps.googleusercontent.com",
           "client_type": 3
         }

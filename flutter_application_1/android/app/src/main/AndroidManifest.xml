@@ -28,6 +28,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Android App Links: hive share URLs open the app directly.
+                 autoVerify makes Android fetch /.well-known/assetlinks.json and
+                 match the signing certificate. If the SHA-256 there is wrong the
+                 link silently falls back to the browser with no error. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="flutterapplication-77c19.web.app"
+                    android:pathPrefix="/h/"/>
+            </intent-filter>
             <!-- Intent filter for receiving shared text/links -->
             <!-- Intent filter for receiving shared text/links/images -->
             <!-- Intent filter for receiving shared text/links -->

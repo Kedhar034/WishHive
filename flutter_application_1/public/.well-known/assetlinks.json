@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.wishhive.app",
+      "sha256_cert_fingerprints": [
+        "09:97:2B:38:E7:85:BA:45:FD:3E:5B:F4:F5:A1:55:97:7C:73:9B:E8:6A:B6:47:1F:5A:05:5F:F9:1F:52:46:0F",
+        "81:67:77:93:3C:B7:86:BE:7E:D8:8F:83:D1:1A:B0:D8:63:63:67:F9:55:A1:51:99:06:17:D5:71:9E:7D:AA:E7"
+      ]
+    }
+  }
+]

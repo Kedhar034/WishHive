@@ -1,0 +1,18 @@
+{
+  "name": "wishhive-rules-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Firestore security rules and Cloud Functions regression suites for WishHive.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-wishhive --config ../firebase.json \"node --test firestore.rules.test.mjs\"",
+    "test:functions": "npm --prefix ../functions run build && firebase emulators:exec --only firestore,functions --project demo-wishhive --config ../firebase.json \"node --test --test-concurrency=1 functions.test.mjs functions.callables.test.mjs\"",
+    "settle": "node -e \"setTimeout(()=>{},10000)\"",
+    "test:all": "npm test && npm run settle && npm run test:functions"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.2",
+    "firebase-admin": "^13.0.2"
+  }
+}

@@ -16,10 +16,10 @@ class FriendProfile {
 
   factory FriendProfile.fromMap(Map<String, dynamic> map) {
     return FriendProfile(
-      uid: map['uid'] as String,
-      displayName: map['displayName'] as String,
+      uid: map['uid'] as String? ?? '',
+      displayName: map['displayName'] as String? ?? 'User',
       photoUrl: map['photoUrl'] as String?,
-      email: map['email'] as String,
+      email: map['email'] as String? ?? '',
     );
   }
 
@@ -43,7 +43,7 @@ class UserModel {
   final List<String> friendRequestsSent;
   final List<String> friendRequestsReceived;
   final List<String> mutedFriends;
-  final List<String> hiddenHiveIds; // New: Hide specific hives
+  final List<String> hiddenHiveIds;
 
   const UserModel({
     required this.uid,
@@ -58,9 +58,12 @@ class UserModel {
     this.hiddenHiveIds = const [],
   });
 
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
+  factory UserModel.fromFirestore(DocumentSnapshot doc) =>
+      UserModel.fromMap(doc.data() as Map<String, dynamic>? ?? {}, doc.id);
+
+  /// Parsing split out from [fromFirestore] so it can be exercised directly in
+  /// tests without a Firestore instance.
+  factory UserModel.fromMap(Map<String, dynamic> data, String id) {
     // Parse friends list safely handling legacy string IDs if necessary (though we are starting fresh)
     final friendsData = data['friends'] as List<dynamic>? ?? [];
     final friendsList = friendsData.map((f) {
@@ -71,7 +74,7 @@ class UserModel {
     }).toList();
 
     return UserModel(
-      uid: doc.id,
+      uid: id,
       email: data['email'] as String? ?? '',
       displayName: data['displayName'] as String? ?? 'User',
       username: data['username'] as String?,

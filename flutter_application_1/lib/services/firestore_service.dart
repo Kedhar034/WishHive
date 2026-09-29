@@ -1,9 +1,12 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/hive_model.dart';
 import '../models/wish_model.dart';
 import '../models/user_model.dart';
+import '../models/public_profile.dart';
 import 'image_storage_service.dart';
 
 /// Centralized Firestore service for all Hive and Wish CRUD operations.
@@ -24,6 +27,46 @@ class FirestoreService {
     return _firestore.collection('users');
   }
 
+  // ─── Public profiles ──────────────────────────────────────────────
+  // Read once and cached, replacing the copies that used to be denormalised
+  // into every friend's document.
+
+  static final Map<String, PublicProfile> _profileCache = {};
+
+  Future<PublicProfile?> getPublicProfile(String uid, {bool refresh = false}) async {
+    if (!refresh && _profileCache.containsKey(uid)) return _profileCache[uid];
+    try {
+      final doc = await _firestore.doc('users/$uid/public/profile').get();
+      if (!doc.exists) return null;
+      final p = PublicProfile.fromFirestore(doc, uid);
+      _profileCache[uid] = p;
+      return p;
+    } catch (e) {
+      debugPrint('getPublicProfile($uid) failed: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, PublicProfile>> getPublicProfiles(List<String> uids) async {
+    final out = <String, PublicProfile>{};
+    final missing = <String>[];
+    for (final uid in uids) {
+      final cached = _profileCache[uid];
+      if (cached != null) {
+        out[uid] = cached;
+      } else {
+        missing.add(uid);
+      }
+    }
+    await Future.wait(missing.map((uid) async {
+      final p = await getPublicProfile(uid);
+      if (p != null) out[uid] = p;
+    }));
+    return out;
+  }
+
+  static void clearProfileCache() => _profileCache.clear();
+
   // ─── User & Friend Operations ─────────────────────────────────────
 
   /// Create or update a user document.
@@ -39,65 +82,145 @@ class FirestoreService {
       data.remove('friends');
       data.remove('friendRequestsSent');
       data.remove('friendRequestsReceived');
+      // Also owned by dedicated operations (muteFriend / hideHive). An empty
+      // list survives the null-strip above, so any caller constructing a fresh
+      // UserModel rather than using copyWith would otherwise erase them.
+      data.remove('mutedFriends');
+      data.remove('hiddenHiveIds');
 
       await _usersCollection.doc(user.uid).set(
             data,
             SetOptions(merge: true),
           );
+          
+      // Background fan-out sync to update friend lists with new name/photo
+      _syncUserProfileToFriends(user).catchError((e) => debugPrint('Error syncing profile: $e'));
     } catch (e) {
       debugPrint('Error updating user: $e');
       rethrow;
     }
   }
 
-  /// Search for users by username prefix or exact email.
+  /// Search for users by username.
+  ///
+  /// Reads public profiles only. The previous version queried whole user
+  /// documents, so every search returned the matched users' email addresses
+  /// and their entire friends list \u2014 including those friends' emails.
   Future<List<UserModel>> searchUsers(String query) async {
-    try {
-      final queryLower = query.toLowerCase().trim();
-      if (queryLower.isEmpty) return [];
+    final q = query.toLowerCase().trim();
+    if (q.isEmpty) return [];
 
-      // 1. Exact Email Match (Priority)
-      final emailQuery = await _usersCollection
-          .where('email', isEqualTo: queryLower)
-          .limit(5)
-          .get();
-      
-      if (emailQuery.docs.isNotEmpty) {
-        return emailQuery.docs
-            .map((doc) => UserModel.fromFirestore(doc))
-            .toList();
+    try {
+      // Exact username first \u2014 the claim document maps name to uid directly.
+      final claim = await _firestore.doc('usernames/$q').get();
+      if (claim.exists) {
+        final uid = claim.data()?['uid'] as String?;
+        if (uid != null) {
+          final p = await getPublicProfile(uid, refresh: true);
+          if (p != null) return [_asUserModel(p)];
+        }
       }
 
-      // 2. Username Prefix Match
-      // This allows finding "kedhareesh" by typing "ked"
-      final usernameQuery = await _usersCollection
-          .where('username', isGreaterThanOrEqualTo: queryLower)
-          .where('username', isLessThan: '$queryLower\uf8ff')
-          .limit(10) // Limit results for performance
+      final snap = await _firestore
+          .collectionGroup('public')
+          .where('username', isGreaterThanOrEqualTo: q)
+          .where('username', isLessThan: '$q\uf8ff')
+          .limit(20)
           .get();
-      
-      return usernameQuery.docs
-          .map((doc) => UserModel.fromFirestore(doc))
-          .toList();
 
+      return snap.docs.map((d) {
+        final uid = d.reference.parent.parent!.id;
+        final p = PublicProfile.fromFirestore(d, uid);
+        _profileCache[uid] = p;
+        return _asUserModel(p);
+      }).toList();
     } catch (e) {
       debugPrint('Error searching users: $e');
       return [];
     }
   }
 
+  UserModel _asUserModel(PublicProfile p) => UserModel(
+        uid: p.uid,
+        email: '', // never exposed through search
+        displayName: p.displayName,
+        username: p.username,
+        photoUrl: p.photoUrl,
+      );
+
   /// Check if a username is available (case-insensitive).
+  ///
+  /// Advisory only — two users can pass this at the same moment. Use
+  /// [claimUsername] to actually take the name.
   Future<bool> isUsernameAvailable(String username) async {
+    final name = username.toLowerCase().trim();
+    if (name.isEmpty) return false;
+
+    // Preferred check. If this collection is unreadable — rules not deployed
+    // yet — fall through to the legacy check rather than reporting every name
+    // as taken.
+    try {
+      final doc = await _firestore.doc('usernames/$name').get();
+      if (doc.exists) return doc.data()?['uid'] == _uid;
+    } catch (e) {
+      debugPrint('usernames lookup unavailable, using legacy check: $e');
+    }
+
     try {
       final query = await _usersCollection
-          .where('username', isEqualTo: username.toLowerCase().trim())
+          .where('username', isEqualTo: name)
           .limit(1)
           .get();
-      return query.docs.isEmpty;
+      if (query.docs.isEmpty) return true;
+      return query.docs.first.id == _uid;
     } catch (e) {
       debugPrint('Error checking username: $e');
       return false; // Fail safe
     }
+  }
+
+  /// Atomically take [username], returning false if someone else got there
+  /// first. The document id *is* the name, and the rules forbid overwriting an
+  /// existing one, so the create either succeeds or the name was taken — there
+  /// is no window between checking and claiming.
+  Future<bool> claimUsername(String username) async {
+    final uid = _uid;
+    if (uid == null) return false;
+    final name = username.toLowerCase().trim();
+    if (name.isEmpty) return false;
+
+    try {
+      await _firestore.doc('usernames/$name').set({'uid': uid});
+    } catch (e) {
+      // A denied write means either the name is held by someone else, or the
+      // usernames rules are not deployed. Read it back to tell those apart —
+      // otherwise an undeployed ruleset blocks every signup.
+      try {
+        final doc = await _firestore.doc('usernames/$name').get();
+        if (doc.exists && doc.data()?['uid'] != uid) {
+          debugPrint('Username "$name" is held by another account');
+          return false;
+        }
+      } catch (_) {
+        // Not even readable — the collection isn't live yet.
+      }
+      debugPrint('Username claim unavailable, continuing without it: $e');
+      return true;
+    }
+
+    // Release any name this user previously held.
+    try {
+      final previous = await _firestore
+          .collection('usernames')
+          .where('uid', isEqualTo: uid)
+          .get();
+      for (final doc in previous.docs) {
+        if (doc.id != name) await doc.reference.delete();
+      }
+    } catch (e) {
+      debugPrint('Could not release previous username: $e');
+    }
+    return true;
   }
   
   /// Send a friend request to [targetUid].
@@ -133,55 +256,250 @@ class FirestoreService {
     if (uid == null) throw Exception('User not authenticated');
     
     try {
-      final batch = _firestore.batch();
-      
       final meRef = _usersCollection.doc(uid);
       final requesterRef = _usersCollection.doc(requesterUid);
       
-      // Fetch both users to get their profile details for denormalization
-      final meDoc = await meRef.get();
-      final requesterDoc = await requesterRef.get();
-      
-      if (!meDoc.exists || !requesterDoc.exists) {
-        throw Exception('User not found');
-      }
-      
-      final meData = UserModel.fromFirestore(meDoc);
-      final requesterData = UserModel.fromFirestore(requesterDoc);
-      
-      final meProfile = FriendProfile(
-        uid: meData.uid,
-        displayName: meData.displayName,
-        photoUrl: meData.photoUrl,
-        email: meData.email,
-      );
-      
-      final requesterProfile = FriendProfile(
-        uid: requesterData.uid,
-        displayName: requesterData.displayName,
-        photoUrl: requesterData.photoUrl,
-        email: requesterData.email,
-      );
-      
-      // 1. Update Me: Add Friend, Remove Request Received
-      batch.update(meRef, {
-        'friends': FieldValue.arrayUnion([requesterProfile.toMap()]),
-        'friendRequestsReceived': FieldValue.arrayRemove([requesterUid]),
+      await _firestore.runTransaction((transaction) async {
+        final meDoc = await transaction.get(meRef);
+        final requesterDoc = await transaction.get(requesterRef);
+        
+        if (!meDoc.exists || !requesterDoc.exists) {
+          throw Exception('User not found');
+        }
+        
+        final meData = UserModel.fromFirestore(meDoc);
+        final requesterData = UserModel.fromFirestore(requesterDoc);
+        
+        final meProfile = FriendProfile(
+          uid: meData.uid,
+          displayName: meData.displayName,
+          photoUrl: meData.photoUrl,
+          email: meData.email,
+        );
+        
+        final requesterProfile = FriendProfile(
+          uid: requesterData.uid,
+          displayName: requesterData.displayName,
+          photoUrl: requesterData.photoUrl,
+          email: requesterData.email,
+        );
+        
+        // 1. Update Me: Add Friend, Remove Request Received
+        transaction.update(meRef, {
+          'friends': FieldValue.arrayUnion([requesterProfile.toMap()]),
+          'friendRequestsReceived': FieldValue.arrayRemove([requesterUid]),
+        });
+        
+        // 2. Update Requester: Add Friend, Remove Request Sent
+        transaction.update(requesterRef, {
+          'friends': FieldValue.arrayUnion([meProfile.toMap()]),
+          'friendRequestsSent': FieldValue.arrayRemove([uid]),
+        });
       });
-      
-      // 2. Update Requester: Add Friend, Remove Request Sent
-      batch.update(requesterRef, {
-        'friends': FieldValue.arrayUnion([meProfile.toMap()]),
-        'friendRequestsSent': FieldValue.arrayRemove([uid]),
-      });
-      
-      await batch.commit();
     } catch (e) {
       debugPrint('Error accepting friend request: $e');
       rethrow;
     }
   }
   
+  /// Propagates a changed name/photo into friends' denormalised copies.
+  ///
+  /// Swaps only this user's own card via arrayRemove/arrayUnion. The previous
+  /// implementation rewrote each friend's entire array from a stale read, which
+  /// silently deleted any friendship added while the loop was running.
+  ///
+  /// Deleted once reads move to users/{uid}/public/profile.
+  Future<void> _syncUserProfileToFriends(UserModel user) async {
+    try {
+      final meDoc = await _usersCollection.doc(user.uid).get();
+      if (!meDoc.exists) return;
+
+      final latestMe = UserModel.fromFirestore(meDoc);
+      if (latestMe.friends.isEmpty) return;
+
+      final newCard = FriendProfile(
+        uid: latestMe.uid,
+        displayName: latestMe.displayName,
+        photoUrl: latestMe.photoUrl,
+        email: latestMe.email,
+      ).toMap();
+
+      for (final friend in latestMe.friends) {
+        final friendRef = _usersCollection.doc(friend.uid);
+        try {
+          final friendDoc = await friendRef.get();
+          if (!friendDoc.exists) continue;
+
+          final theirView = UserModel.fromFirestore(friendDoc)
+              .friends
+              .where((f) => f.uid == user.uid)
+              .toList();
+          if (theirView.isEmpty) continue;
+
+          final oldCard = theirView.first.toMap();
+          if (_sameCard(oldCard, newCard)) continue;
+
+          await friendRef.update({
+            'friends': FieldValue.arrayRemove([oldCard])
+          });
+          await friendRef.update({
+            'friends': FieldValue.arrayUnion([newCard])
+          });
+        } catch (e) {
+          debugPrint('Profile sync skipped for ${friend.uid}: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to sync profile to friends: $e');
+    }
+  }
+
+  bool _sameCard(Map<String, dynamic> a, Map<String, dynamic> b) {
+    return a['uid'] == b['uid'] &&
+        a['displayName'] == b['displayName'] &&
+        a['photoUrl'] == b['photoUrl'] &&
+        a['email'] == b['email'];
+  }
+  
+  /// Remove a friendship, in both directions.
+  ///
+  /// Also revokes any specific-hive access granted to them, so the hives they
+  /// could see disappear along with the friendship rather than lingering as
+  /// stale grants.
+  Future<void> removeFriend(String friendUid) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    try {
+      final meRef = _usersCollection.doc(uid);
+      final themRef = _usersCollection.doc(friendUid);
+
+      final meSnap = await meRef.get();
+      final themSnap = await themRef.get();
+
+      // arrayRemove needs the exact stored map, so read each side's copy.
+      if (meSnap.exists) {
+        final theirCard = UserModel.fromFirestore(meSnap)
+            .friends
+            .where((f) => f.uid == friendUid)
+            .toList();
+        if (theirCard.isNotEmpty) {
+          await meRef.update({
+            'friends': FieldValue.arrayRemove([theirCard.first.toMap()]),
+          });
+        }
+      }
+
+      if (themSnap.exists) {
+        final myCard = UserModel.fromFirestore(themSnap)
+            .friends
+            .where((f) => f.uid == uid)
+            .toList();
+        if (myCard.isNotEmpty) {
+          await themRef.update({
+            'friends': FieldValue.arrayRemove([myCard.first.toMap()]),
+          });
+        }
+      }
+
+      // Drop any pending request either way, and unmute.
+      await meRef.update({
+        'friendRequestsSent': FieldValue.arrayRemove([friendUid]),
+        'friendRequestsReceived': FieldValue.arrayRemove([friendUid]),
+        'mutedFriends': FieldValue.arrayRemove([friendUid]),
+      });
+      await themRef.update({
+        'friendRequestsSent': FieldValue.arrayRemove([uid]),
+        'friendRequestsReceived': FieldValue.arrayRemove([uid]),
+      }).catchError((_) {});
+
+      await _revokeHiveAccessFor(uid, friendUid);
+
+      // Keep the migrated structure in step where it already exists.
+      await _firestore.doc('users/$uid/friends/$friendUid').delete().catchError((_) {});
+      await _firestore.doc('users/$friendUid/friends/$uid').delete().catchError((_) {});
+    } catch (e) {
+      debugPrint('Error removing friend: $e');
+      rethrow;
+    }
+  }
+
+  /// Strip [friendUid] from every access list on [uid]'s hives.
+  Future<void> _revokeHiveAccessFor(String uid, String friendUid) async {
+    final hives = await _hivesCollection(uid).get();
+    for (final doc in hives.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final viewers = List<String>.from(
+          data['viewerIds'] ?? data['allowedViewerIds'] ?? []);
+      final editors = List<String>.from(
+          data['editorIds'] ?? data['allowedEditorIds'] ?? []);
+
+      if (!viewers.contains(friendUid) && !editors.contains(friendUid)) continue;
+
+      viewers.remove(friendUid);
+      editors.remove(friendUid);
+      await doc.reference.update({
+        'viewerIds': viewers,
+        'editorIds': editors,
+        'allowedViewerIds': viewers,
+        'allowedEditorIds': editors,
+      });
+    }
+  }
+
+  /// Withdraw a request this user sent to [targetUid].
+  Future<void> cancelFriendRequest(String targetUid) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    try {
+      final batch = _firestore.batch();
+      batch.update(_usersCollection.doc(uid), {
+        'friendRequestsSent': FieldValue.arrayRemove([targetUid]),
+      });
+      batch.update(_usersCollection.doc(targetUid), {
+        'friendRequestsReceived': FieldValue.arrayRemove([uid]),
+      });
+      await batch.commit();
+
+      // Keep the migrated structure in step where it already exists.
+      await _firestore
+          .doc('users/$targetUid/friendRequests/$uid')
+          .delete()
+          .catchError((_) {});
+      await _firestore
+          .doc('users/$uid/sentRequests/$targetUid')
+          .delete()
+          .catchError((_) {});
+    } catch (e) {
+      debugPrint('Error cancelling friend request: $e');
+      rethrow;
+    }
+  }
+
+  /// File a moderation report. Write-only for users — only moderators read the
+  /// `reports` collection.
+  Future<void> reportContent({
+    required String targetType,
+    required String targetId,
+    required String targetOwnerUid,
+    required String reason,
+    String details = '',
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    await _firestore.collection('reports').add({
+      'reporterUid': uid,
+      'targetType': targetType,
+      'targetId': targetId,
+      'targetOwnerUid': targetOwnerUid,
+      'reason': reason.length > 64 ? reason.substring(0, 64) : reason,
+      'details': details.length > 1000 ? details.substring(0, 1000) : details,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// Reject a friend request from [requesterUid].
   Future<void> rejectFriendRequest(String requesterUid) async {
     final uid = _uid;
@@ -203,7 +521,6 @@ class FirestoreService {
         'friendRequestsSent': FieldValue.arrayRemove([uid]),
       });
       
-      await batch.commit();
       await batch.commit();
     } catch (e) {
       debugPrint('Error rejecting friend request: $e');
@@ -255,26 +572,15 @@ class FirestoreService {
     }
   }
 
-  /// Get multiple users by ID (Batch fetch).
+  /// Get multiple users by ID. Reads public profiles, not full user documents.
   Future<List<UserModel>> getUsers(List<String> userIds) async {
     if (userIds.isEmpty) return [];
-    
     try {
-      // Firestore 'whereIn' is limited to 10 values. We must chunk the requests.
-      const int chuckSize = 10;
-      List<UserModel> allUsers = [];
-      
-      for (var i = 0; i < userIds.length; i += chuckSize) {
-        final end = (i + chuckSize < userIds.length) ? i + chuckSize : userIds.length;
-        final chunk = userIds.sublist(i, end);
-        
-        final query = await _usersCollection.where(FieldPath.documentId, whereIn: chunk).get();
-        
-        final chunkUsers = query.docs.map((doc) => UserModel.fromFirestore(doc)).toList();
-        allUsers.addAll(chunkUsers);
-      }
-      
-      return allUsers; // Note: they might not be in the same order as userIds
+      final profiles = await getPublicProfiles(userIds);
+      return userIds
+          .where(profiles.containsKey)
+          .map((uid) => _asUserModel(profiles[uid]!))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching users batch: $e');
       return [];
@@ -340,6 +646,8 @@ class FirestoreService {
         'imageUrl': hive.imageUrl,
         'note': hive.note,
         'privacy': hive.privacy.name,
+        'viewerIds': hive.allowedViewerIds,
+        'editorIds': hive.allowedEditorIds,
         'allowedViewerIds': hive.allowedViewerIds,
         'allowedEditorIds': hive.allowedEditorIds,
       });
@@ -347,6 +655,59 @@ class FirestoreService {
       debugPrint('Error updating hive: $e');
       rethrow;
     }
+  }
+
+  static const String shareDomain = 'flutterapplication-77c19.web.app';
+
+  /// Returns the shareable URL for [hiveId], generating the token on first use.
+  ///
+  /// The token is random and separate from the document id, so links cannot be
+  /// guessed and a leaked one can be killed without deleting the hive.
+  Future<String> ensureShareLink(String hiveId) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('User not authenticated');
+
+    final ref = _firestore.doc('hives/$hiveId');
+    final snap = await ref.get();
+    if (!snap.exists) throw Exception('Hive not found');
+
+    final data = snap.data() as Map<String, dynamic>;
+    if (data['ownerId'] != uid) throw Exception('Only the owner can share this hive');
+
+    var shareId = data['shareId'] as String? ?? '';
+    final enabled = data['linkShareEnabled'] as bool? ?? false;
+
+    if (shareId.isEmpty || !enabled) {
+      if (shareId.isEmpty) shareId = _randomShareId();
+      await ref.update({'shareId': shareId, 'linkShareEnabled': true});
+      await _hivesCollection(uid)
+          .doc(hiveId)
+          .update({'shareId': shareId, 'linkShareEnabled': true})
+          .catchError((_) {});
+    }
+
+    return 'https://$shareDomain/h/$shareId';
+  }
+
+  /// Stops new people redeeming the link. Anyone already granted keeps access
+  /// until the owner removes them in Manage Access.
+  Future<void> disableShareLink(String hiveId) async {
+    await _firestore.doc('hives/$hiveId').update({'linkShareEnabled': false});
+    final uid = _uid;
+    if (uid != null) {
+      await _hivesCollection(uid)
+          .doc(hiveId)
+          .update({'linkShareEnabled': false})
+          .catchError((_) {});
+    }
+  }
+
+  static const _shareAlphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
+
+  String _randomShareId() {
+    final rand = Random.secure();
+    return List.generate(12, (_) => _shareAlphabet[rand.nextInt(_shareAlphabet.length)])
+        .join();
   }
 
   /// Delete a hive and all its associated wishes, including image cleanup.
@@ -360,14 +721,26 @@ class FirestoreService {
           .where('hiveId', isEqualTo: hiveId)
           .get();
 
-      // Delete wish images and wish documents
+      // Batched so a mid-loop failure cannot leave orphaned wishes behind,
+      // which would keep firing the unseen-fulfilled badge for a hive that no
+      // longer exists.
+      for (var i = 0; i < wishesSnapshot.docs.length; i += 400) {
+        final end = (i + 400 < wishesSnapshot.docs.length)
+            ? i + 400
+            : wishesSnapshot.docs.length;
+        final batch = _firestore.batch();
+        for (final wishDoc in wishesSnapshot.docs.sublist(i, end)) {
+          batch.delete(wishDoc.reference);
+        }
+        await batch.commit();
+      }
+
       for (final wishDoc in wishesSnapshot.docs) {
         final wishData = wishDoc.data() as Map<String, dynamic>;
         final imageUrl = wishData['imageUrl'] as String? ?? '';
         if (ImageStorageService.isLocalPath(imageUrl)) {
           await ImageStorageService.deleteImage(imageUrl);
         }
-        await wishDoc.reference.delete();
       }
 
       // Delete hive image
@@ -448,15 +821,31 @@ class FirestoreService {
   }
 
   /// Update an existing wish.
-  Future<void> updateWish(WishModel wish) async {
-    final uid = _uid;
+  ///
+  /// [ownerId] is the hive owner — pass it when a friend edits a wish in
+  /// someone else's hive, otherwise the write targets the wrong collection.
+  ///
+  /// Keeps the parent hive's aggregates correct. The previous version changed
+  /// `cost` without touching `totalCost`, so a hive's total was wrong from the
+  /// first price edit onwards and never recovered.
+  Future<void> updateWish(WishModel wish, {String? ownerId}) async {
+    final uid = ownerId ?? _uid;
     if (uid == null) throw Exception('User not authenticated');
 
     try {
-      await _wishesCollection(uid).doc(wish.id).update({
+      final ref = _wishesCollection(uid).doc(wish.id);
+      final before = await ref.get();
+      if (!before.exists) throw Exception('Wish not found');
+
+      final beforeData = before.data() as Map<String, dynamic>;
+      final oldCost = (beforeData['cost'] as num?)?.toDouble() ?? 0.0;
+      final oldHiveId = beforeData['hiveId'] as String? ?? wish.hiveId;
+
+      await ref.update({
         'name': wish.name,
-        'subtitle': wish.subtitle, // Update subtitle
+        'subtitle': wish.subtitle,
         'imageUrl': wish.imageUrl,
+        'hiveId': wish.hiveId,
         'note': wish.note,
         'link': wish.link,
         'cost': wish.cost,
@@ -465,6 +854,25 @@ class FirestoreService {
         'fulfilledBy': wish.fulfilledBy,
         'fulfilledByName': wish.fulfilledByName,
       });
+
+      if (oldHiveId == wish.hiveId) {
+        final delta = wish.cost - oldCost;
+        if (delta != 0) {
+          await _hivesCollection(uid).doc(wish.hiveId).update({
+            'totalCost': FieldValue.increment(delta),
+          });
+        }
+      } else {
+        // Moved to a different hive — correct both.
+        await _hivesCollection(uid).doc(oldHiveId).update({
+          'itemCount': FieldValue.increment(-1),
+          'totalCost': FieldValue.increment(-oldCost),
+        });
+        await _hivesCollection(uid).doc(wish.hiveId).update({
+          'itemCount': FieldValue.increment(1),
+          'totalCost': FieldValue.increment(wish.cost),
+        });
+      }
     } catch (e) {
       debugPrint('Error updating wish: $e');
       rethrow;
@@ -472,8 +880,11 @@ class FirestoreService {
   }
 
   /// Delete a wish and update the parent hive's aggregates.
-  Future<void> deleteWish(String wishId) async {
-    final uid = _uid;
+  ///
+  /// [ownerId] is the hive owner — pass it when a friend deletes a wish they
+  /// contributed to someone else's hive.
+  Future<void> deleteWish(String wishId, {String? ownerId}) async {
+    final uid = ownerId ?? _uid;
     if (uid == null) throw Exception('User not authenticated');
 
     try {
@@ -626,108 +1037,110 @@ class FirestoreService {
   /// [friends] list provides IDs and display names (for accurate attribution).
   /// [mutedFriendIds] allows filtering out hidden friends.
   // Friend Feed
+  /// Live feed.
+  ///
+  /// Everything that changes who may see a hive — accepting a friend request,
+  /// granting or revoking view/edit, unfriending — ends up rewriting
+  /// `audienceIds` from a Cloud Function. Listening rather than fetching means
+  /// those changes arrive on their own; the previous one-shot fetch ran before
+  /// the function had finished and then never retried, which is why a newly
+  /// accepted friend's hives only appeared after an app restart.
+  Stream<List<HiveModel>> feedStream({
+    List<String> mutedFriendIds = const [],
+    List<String> hiddenHiveIds = const [],
+    bool onlyHidden = false,
+    int limit = 60,
+  }) {
+    final uid = _uid;
+    if (uid == null) return Stream.value(const []);
+
+    return _firestore
+        .collection('hives')
+        .where('audienceIds', arrayContains: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .asyncMap((snapshot) => _decorateFeed(
+              snapshot,
+              uid,
+              mutedFriendIds: mutedFriendIds,
+              hiddenHiveIds: hiddenHiveIds,
+              onlyHidden: onlyHidden,
+            ));
+  }
+
+  Future<List<HiveModel>> _decorateFeed(
+    QuerySnapshot snapshot,
+    String uid, {
+    required List<String> mutedFriendIds,
+    required List<String> hiddenHiveIds,
+    required bool onlyHidden,
+  }) async {
+    final hives = <HiveModel>[];
+    for (final doc in snapshot.docs) {
+      final hive = HiveModel.fromFirestore(doc);
+      if (hive.ownerId.isEmpty || hive.ownerId == uid) continue;
+      if (mutedFriendIds.contains(hive.ownerId)) continue;
+      if (hiddenHiveIds.contains(hive.id) != onlyHidden) continue;
+      hives.add(hive);
+    }
+
+    final profiles =
+        await getPublicProfiles(hives.map((h) => h.ownerId).toSet().toList());
+
+    return hives.map((h) {
+      final name = profiles[h.ownerId]?.displayName;
+      return h.copyWith(
+        ownerDisplayName:
+            (name != null && name.isNotEmpty) ? name : h.ownerDisplayName,
+      );
+    }).toList();
+  }
+
+  /// One indexed query, replacing the previous two-queries-per-friend fan-out.
+  ///
+  /// `audienceIds` is resolved server-side by the onHiveWrite function, so this
+  /// returns exactly the hives the caller is entitled to see regardless of
+  /// privacy mode — and the security rules enforce the same condition.
   Future<List<HiveModel>> getFriendsFeed(
     List<FriendProfile> friends, {
     List<String> mutedFriendIds = const [],
     List<String> hiddenHiveIds = const [],
     bool onlyHidden = false,
+    int limit = 60,
   }) async {
-    if (friends.isEmpty) return [];
     final uid = _uid;
+    if (uid == null) return [];
 
     try {
-      List<HiveModel> allHives = [];
-      const int hivesPerFriend = 5; 
+      final snapshot = await _firestore
+          .collection('hives')
+          .where('audienceIds', arrayContains: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(limit)
+          .get();
 
-      // Filter out muted friends and map to IDs
-      final activeFriends = friends.where((f) => !mutedFriendIds.contains(f.uid)).toList();
-
-      // Parallel fetch for each friend
-      final futures = activeFriends.map((friend) async {
-        final fid = friend.uid;
-        final collection = _hivesCollection(fid);
-        
-        // Query 1: Public or Friends-only
-        final queryStandard = collection
-            .where('privacy', whereIn: ['public', 'friends'])
-            .limit(hivesPerFriend);
-            
-        // Query 2: Specific Access
-        Query? querySpecific;
-        if (uid != null) {
-           querySpecific = collection
-            .where('privacy', isEqualTo: 'specific_friends')
-            .where('allowedViewerIds', arrayContains: uid)
-            .limit(hivesPerFriend);
-        }
-
-        final results = await Future.wait([
-          queryStandard.get(),
-          if (querySpecific != null) querySpecific.get(),
-        ]);
-
-        List<HiveModel> friendHives = [];
-        for (var snapshot in results) {
-           if (snapshot != null) {
-              final docs = (snapshot as QuerySnapshot).docs;
-              for (var doc in docs) {
-                  var hive = HiveModel.fromFirestore(doc);
-                  
-                  // FIX: Override ownerDisplayName with friend's current name
-                  // Use displayName, fall back to fetching username if empty
-                  String friendName = friend.displayName;
-                  if (friendName.isEmpty) {
-                    try {
-                      final friendDoc = await _usersCollection.doc(fid).get();
-                      if (friendDoc.exists) {
-                        final friendUser = UserModel.fromFirestore(friendDoc);
-                        friendName = friendUser.username ?? friendUser.displayName;
-                      }
-                    } catch (_) { /* fallback to empty */ }
-                  }
-                  hive = hive.copyWith(
-                    ownerDisplayName: friendName.isNotEmpty ? friendName : 'Friend',
-                    ownerId: fid, 
-                  );
-
-                  // Deduplicate & Filter Hidden Hives
-                  final isHidden = hiddenHiveIds.contains(hive.id);
-
-                  if (onlyHidden) {
-                    // Show ONLY hidden hives
-                    if (isHidden) {
-                       if (!friendHives.any((h) => h.id == hive.id)) {
-                          friendHives.add(hive);
-                       }
-                    }
-                  } else {
-                    // Show ONLY visible hives (default feed)
-                    if (!isHidden) {
-                       if (!friendHives.any((h) => h.id == hive.id)) {
-                          friendHives.add(hive);
-                       }
-                    }
-                  }
-              }
-           }
-        }
-        return friendHives;
-      });
-
-      final List<List<HiveModel>> results = await Future.wait(futures);
-      
-      for (var hives in results) {
-        allHives.addAll(hives);
+      final hives = <HiveModel>[];
+      for (final doc in snapshot.docs) {
+        final hive = HiveModel.fromFirestore(doc);
+        if (hive.ownerId.isEmpty || hive.ownerId == uid) continue;
+        if (mutedFriendIds.contains(hive.ownerId)) continue;
+        if (hiddenHiveIds.contains(hive.id) != onlyHidden) continue;
+        hives.add(hive);
       }
 
-      // Sort combined list by date descending
-      allHives.sort((a, b) {
-        final aDate = a.createdAt ?? DateTime(0);
-        final bDate = b.createdAt ?? DateTime(0);
-        return bDate.compareTo(aDate);
-      });
+      // Owner names come from the single public profile document rather than
+      // the copies that used to be denormalised into every friend's document.
+      final profiles =
+          await getPublicProfiles(hives.map((h) => h.ownerId).toSet().toList());
 
-      return allHives;
+      return hives.map((h) {
+        final name = profiles[h.ownerId]?.displayName;
+        return h.copyWith(
+          ownerDisplayName:
+              (name != null && name.isNotEmpty) ? name : h.ownerDisplayName,
+        );
+      }).toList();
     } catch (e) {
       debugPrint('Error fetching friend feed: $e');
       return [];

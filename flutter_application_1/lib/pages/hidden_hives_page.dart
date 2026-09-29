@@ -7,6 +7,7 @@ import '../models/hive_model.dart';
 import '../models/user_model.dart';
 import '../services/image_storage_service.dart';
 import '../widgets/avatar_image.dart';
+import '../widgets/app_refresh.dart';
 
 class HiddenHivesPage extends ConsumerStatefulWidget {
   const HiddenHivesPage({super.key});
@@ -111,7 +112,11 @@ class _HiddenHivesPageState extends ConsumerState<HiddenHivesPage> {
             );
           }
 
-          return FutureBuilder<List<HiveModel>>(
+          return AppRefresh(
+            onRefresh: () async {
+              if (mounted) setState(() {});
+            },
+            child: FutureBuilder<List<HiveModel>>(
             future: _fetchHiddenFeed(myUser.friends, myUser.hiddenHiveIds),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -174,6 +179,7 @@ class _HiddenHivesPageState extends ConsumerState<HiddenHivesPage> {
                 },
               );
             },
+          ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),

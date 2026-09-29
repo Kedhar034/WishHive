@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:http/http.dart' as http;
 import 'package:metadata_fetch/metadata_fetch.dart';
 
@@ -7,12 +11,30 @@ class LinkMetadata {
   final String url;
   final String? description;
 
+  /// Every image found, best first. [imageUrl] is always the first entry when
+  /// there is one, so existing single-image callers keep working unchanged.
+  final List<String> images;
+
+  final double? price;
+  final String? currency;
+  final double? rating;
+  final int? ratingCount;
+  final String? brand;
+
   LinkMetadata({
     required this.title,
     this.imageUrl,
     required this.url,
     this.description,
+    this.images = const [],
+    this.price,
+    this.currency,
+    this.rating,
+    this.ratingCount,
+    this.brand,
   });
+
+  bool get hasPrice => price != null && price! > 0;
 }
 
 class MetadataService {
@@ -20,7 +42,7 @@ class MetadataService {
   /// Returns a [LinkMetadata] object if successful, or null if it fails.
   static Future<LinkMetadata?> extract(String url) async {
     try {
-      // 1. Prepare a browser-like User-Agent to avoid being blocked (e.g. by Amazon)
+      // Browser-like User-Agent to avoid being blocked (e.g. by Amazon)
       final response = await http.get(
         Uri.parse(url),
         headers: {
@@ -32,169 +54,262 @@ class MetadataService {
       );
 
       if (response.statusCode != 200) {
-        // If failed, try basic extract provided by the package as fallback
-        // or just return plain url data
         return LinkMetadata(title: 'Shared Link', url: url, imageUrl: null);
       }
 
-      // 2. Parse the response
       final document = MetadataFetch.responseToDocument(response);
       if (document == null) {
-         return LinkMetadata(title: '', url: url, imageUrl: null);
+        return LinkMetadata(title: '', url: url, imageUrl: null);
       }
 
-      // 3. Extract Metadata
-      final data = MetadataParser.parse(document);
-      
-      // 4. Smart Title Cleanup (Amazon fix)
-      String title = data.title ?? data.url ?? '';
-      
-      // Remove common suffixes
-      final suffixes = [' | Amazon.in', ' : Amazon.in', ' : Amazon.com', ' | Blinkit'];
-      for (final suffix in suffixes) {
-        if (title.endsWith(suffix)) {
-          title = title.substring(0, title.length - suffix.length);
-        }
-      }
-
-      // 5. Image Fallback - Maximum Robustness
-      String? image = data.image;
-      
-      if (image == null || image.isEmpty) {
-        // Manual fallback: sometimes library misses specific tags or specific structures
-        // We parse the raw HTML body for common image meta tags
-        try {
-          final html = document.outerHtml;
-          
-          // Helper to extract content from meta tags
-          String? getMeta(String property) {
-            final RegExp regExp = RegExp(
-              '<meta[^>]*property=["\']$property["\'][^>]*content=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-            final match = regExp.firstMatch(html);
-            return match?.group(1);
-          }
-
-          // Helper to extract content from itemprop (Schema.org)
-           String? getItemProp(String property) {
-            final RegExp regExp = RegExp(
-              '<meta[^>]*itemprop=["\']$property["\'][^>]*content=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-            final match = regExp.firstMatch(html);
-            return match?.group(1);
-          }
-          
-          // Try OG Image again manually
-          image = getMeta('og:image');
-          image ??= getMeta('og:image:secure_url'); // HTTPS variant
-          
-          // Try Twitter Image
-          image ??= getMeta('twitter:image');
-          image ??= getMeta('twitter:image:src');
-
-          // Try Link Rel Image Src
-          if (image == null) {
-             final RegExp linkRegExp = RegExp(
-              '<link[^>]*rel=["\']image_src["\'][^>]*href=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-             final match = linkRegExp.firstMatch(html);
-             image = match?.group(1);
-          }
-
-          // Try Itemprop Image (Schema.org)
-          if (image == null) {
-            image = getItemProp('image');
-          }
-          
-          // Try Preload as Image (often the main LCP image)
-          if (image == null) {
-            final RegExp preloadRegExp = RegExp(
-              '<link[^>]*rel=["\']preload["\'][^>]*as=["\']image["\'][^>]*href=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-            final match = preloadRegExp.firstMatch(html);
-            image = match?.group(1);
-          }
-
-          // Fix relative URLs
-          if (image != null && !image!.startsWith('http')) {
-             final uri = Uri.parse(url);
-             if (image!.startsWith('//')) {
-               image = '${uri.scheme}:$image';
-             } else if (image!.startsWith('/')) {
-               image = '${uri.scheme}://${uri.host}$image';
-             } else {
-               image = '${uri.scheme}://${uri.host}/$image';
-             }
-          }
-
-          // Try Link Rel Image Src
-          if (image == null) {
-             final RegExp linkRegExp = RegExp(
-              '<link[^>]*rel=["\']image_src["\'][^>]*href=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-             final match = linkRegExp.firstMatch(html);
-             image = match?.group(1);
-          }
-
-          // Try Itemprop Image (Schema.org)
-          if (image == null) {
-            final RegExp itemPropRegExp = RegExp(
-              '<meta[^>]*itemprop=["\']image["\'][^>]*content=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-            final match = itemPropRegExp.firstMatch(html);
-            image = match?.group(1);
-          }
-          
-          // Try Preload as Image (often the main LCP image)
-          if (image == null) {
-            final RegExp preloadRegExp = RegExp(
-              '<link[^>]*rel=["\']preload["\'][^>]*as=["\']image["\'][^>]*href=["\']([^"\']+)["\']',
-              caseSensitive: false,
-            );
-            final match = preloadRegExp.firstMatch(html);
-            image = match?.group(1);
-          }
-
-          // Fix relative URLs
-          if (image != null && !image.startsWith('http')) {
-             final uri = Uri.parse(url);
-             if (image.startsWith('//')) {
-               image = '${uri.scheme}:$image';
-             } else if (image.startsWith('/')) {
-               image = '${uri.scheme}://${uri.host}$image';
-             } else {
-               image = '${uri.scheme}://${uri.host}/$image';
-             }
-          }
-          } catch (e) {
-           // ignore manual parse errors
-          }
-      }
-
-      // Filter out invalid Amazon/Ad tracking pixels that masquerade as images
-      if (image != null) {
-          if (image!.contains('fls-eu.amazon') || 
-              image!.contains('pixel') || 
-              image!.contains('doubleclick')) {
-             image = null;
-          }
-      }
-      
-      return LinkMetadata(
-        title: title.trim(),
-        imageUrl: image,
-        url: url,
-        description: data.description,
-      );
+      return parseDocument(document, url);
     } catch (e) {
-      // Return basic data if fetch fails but we have a URL
+      debugPrint('MetadataService.extract failed: $e');
       return LinkMetadata(title: '', url: url, imageUrl: null);
     }
+  }
+
+  /// Split out from [extract] so the parsing can be exercised directly in tests
+  /// without a network request.
+  static LinkMetadata parseDocument(dom.Document document, String url) {
+    // metadata_fetch throws on malformed ld+json rather than skipping it, so a
+    // single broken block on a page would otherwise take down the whole
+    // extraction and leave the wish with no title or image at all.
+    Metadata? data;
+    try {
+      data = MetadataParser.parse(document);
+    } catch (e) {
+      debugPrint('MetadataParser failed, using manual fallbacks: $e');
+    }
+    final html = document.outerHtml;
+
+    // Most retailers embed a full schema.org/Product block, which carries price,
+    // rating, brand and the whole image list. Meta tags only ever carry a title
+    // and one image, which is why price never appeared before.
+    final product = _firstProduct(html);
+
+    String title = _cleanTitle(
+      _stringOf(product?['name']) ??
+          data?.title ??
+          _metaTitle(html) ??
+          data?.url ??
+          '',
+    );
+
+    final images = <String>[];
+    void addImage(String? candidate) {
+      final fixed = _absolute(candidate, url);
+      if (fixed != null && !_isTrackingPixel(fixed) && !images.contains(fixed)) {
+        images.add(fixed);
+      }
+    }
+
+    for (final img in _imageList(product?['image'])) {
+      addImage(img);
+    }
+    addImage(data?.image);
+    for (final img in _metaImages(html)) {
+      addImage(img);
+    }
+
+    final offer = _firstOffer(product);
+    final rating = _asMap(product?['aggregateRating']);
+
+    return LinkMetadata(
+      title: title.trim(),
+      imageUrl: images.isNotEmpty ? images.first : null,
+      images: images,
+      url: url,
+      description: _stringOf(product?['description']) ?? data?.description,
+      price: _parseNumber(offer?['price'] ?? offer?['lowPrice']),
+      currency: _stringOf(offer?['priceCurrency']),
+      rating: _parseNumber(rating?['ratingValue']),
+      ratingCount:
+          _parseNumber(rating?['reviewCount'] ?? rating?['ratingCount'])?.round(),
+      brand: _brandName(product?['brand']),
+    );
+  }
+
+  // ─── schema.org/Product ───────────────────────────────────────────────────
+
+  static final RegExp _ldJsonBlock = RegExp(
+    r'<script[^>]*type=["' "'" r']application/ld\+json["' "'" r'][^>]*>([\s\S]*?)</script>',
+    caseSensitive: false,
+  );
+
+  /// Finds the first schema.org Product in any ld+json block on the page.
+  /// Handles a bare object, a top-level array and an @graph wrapper.
+  static Map<String, dynamic>? _firstProduct(String html) {
+    for (final match in _ldJsonBlock.allMatches(html)) {
+      final raw = match.group(1);
+      if (raw == null || raw.trim().isEmpty) continue;
+      try {
+        final decoded = jsonDecode(raw);
+        final found = _searchForProduct(decoded);
+        if (found != null) return found;
+      } catch (_) {
+        // A malformed block on the page must not break the whole extraction.
+      }
+    }
+    return null;
+  }
+
+  static Map<String, dynamic>? _searchForProduct(dynamic node, [int depth = 0]) {
+    if (depth > 6) return null;
+
+    if (node is List) {
+      for (final item in node) {
+        final found = _searchForProduct(item, depth + 1);
+        if (found != null) return found;
+      }
+      return null;
+    }
+
+    if (node is Map) {
+      final map = node.cast<String, dynamic>();
+      if (_isType(map['@type'], 'Product')) return map;
+      for (final key in const ['@graph', 'mainEntity', 'itemListElement']) {
+        final found = _searchForProduct(map[key], depth + 1);
+        if (found != null) return found;
+      }
+    }
+    return null;
+  }
+
+  static bool _isType(dynamic type, String wanted) {
+    if (type is String) return type.toLowerCase().contains(wanted.toLowerCase());
+    if (type is List) return type.any((t) => _isType(t, wanted));
+    return false;
+  }
+
+  static Map<String, dynamic>? _firstOffer(Map<String, dynamic>? product) {
+    final offers = product?['offers'];
+    if (offers is List && offers.isNotEmpty) return _asMap(offers.first);
+    return _asMap(offers);
+  }
+
+  static Map<String, dynamic>? _asMap(dynamic value) =>
+      value is Map ? value.cast<String, dynamic>() : null;
+
+  static String? _stringOf(dynamic value) {
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+    return null;
+  }
+
+  static String? _brandName(dynamic brand) {
+    if (brand is String) return _stringOf(brand);
+    final map = _asMap(brand);
+    return map == null ? null : _stringOf(map['name']);
+  }
+
+  /// schema.org allows `image` to be a string, a list, or an ImageObject.
+  static List<String> _imageList(dynamic value) {
+    if (value == null) return const [];
+    if (value is String) return [value];
+    if (value is List) {
+      return value.expand<String>(_imageList).toList();
+    }
+    final map = _asMap(value);
+    if (map != null) {
+      final url = _stringOf(map['url']) ?? _stringOf(map['contentUrl']);
+      if (url != null) return [url];
+    }
+    return const [];
+  }
+
+  /// Handles "₹1,299.00", "1299.00", 1299 and "INR 1299".
+  static double? _parseNumber(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is! String) return null;
+    final cleaned = value.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (cleaned.isEmpty) return null;
+    // Guard against strings that collapse to several dots.
+    final parts = cleaned.split('.');
+    final normalised =
+        parts.length <= 2 ? cleaned : '${parts.first}.${parts[1]}';
+    return double.tryParse(normalised);
+  }
+
+  // ─── meta-tag fallbacks (unchanged behaviour) ─────────────────────────────
+
+  static String? _meta(String html, String property) {
+    final regExp = RegExp(
+      '<meta[^>]*property=["\']$property["\'][^>]*content=["\']([^"\']+)["\']',
+      caseSensitive: false,
+    );
+    return regExp.firstMatch(html)?.group(1);
+  }
+
+  static String? _itemProp(String html, String property) {
+    final regExp = RegExp(
+      '<meta[^>]*itemprop=["\']$property["\'][^>]*content=["\']([^"\']+)["\']',
+      caseSensitive: false,
+    );
+    return regExp.firstMatch(html)?.group(1);
+  }
+
+  /// Used when MetadataParser bails out, so a page with one broken JSON-LD
+  /// block still yields a usable title instead of an empty wish.
+  static String? _metaTitle(String html) {
+    return _meta(html, 'og:title') ??
+        _meta(html, 'twitter:title') ??
+        _itemProp(html, 'name') ??
+        RegExp(r'<title[^>]*>([\s\S]*?)</title>', caseSensitive: false)
+            .firstMatch(html)
+            ?.group(1)
+            ?.trim();
+  }
+
+  static List<String> _metaImages(String html) {
+    final found = <String?>[
+      _meta(html, 'og:image'),
+      _meta(html, 'og:image:secure_url'),
+      _meta(html, 'twitter:image'),
+      _meta(html, 'twitter:image:src'),
+      RegExp(
+        '<link[^>]*rel=["\']image_src["\'][^>]*href=["\']([^"\']+)["\']',
+        caseSensitive: false,
+      ).firstMatch(html)?.group(1),
+      _itemProp(html, 'image'),
+      RegExp(
+        '<link[^>]*rel=["\']preload["\'][^>]*as=["\']image["\'][^>]*href=["\']([^"\']+)["\']',
+        caseSensitive: false,
+      ).firstMatch(html)?.group(1),
+    ];
+    return found.whereType<String>().toList();
+  }
+
+  static const _titleSuffixes = [
+    ' | Amazon.in',
+    ' : Amazon.in',
+    ' : Amazon.com',
+    ' | Blinkit',
+  ];
+
+  static String _cleanTitle(String title) {
+    var result = title;
+    for (final suffix in _titleSuffixes) {
+      if (result.endsWith(suffix)) {
+        result = result.substring(0, result.length - suffix.length);
+      }
+    }
+    return result;
+  }
+
+  static bool _isTrackingPixel(String url) =>
+      url.contains('fls-eu.amazon') ||
+      url.contains('pixel') ||
+      url.contains('doubleclick');
+
+  static String? _absolute(String? candidate, String pageUrl) {
+    if (candidate == null || candidate.trim().isEmpty) return null;
+    final value = candidate.trim();
+    if (value.startsWith('http')) return value;
+
+    final uri = Uri.tryParse(pageUrl);
+    if (uri == null) return null;
+    if (value.startsWith('//')) return '${uri.scheme}:$value';
+    if (value.startsWith('/')) return '${uri.scheme}://${uri.host}$value';
+    return '${uri.scheme}://${uri.host}/$value';
   }
 }

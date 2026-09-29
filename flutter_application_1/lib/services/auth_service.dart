@@ -33,36 +33,16 @@ class AuthService {
       final User? user = userCredential.user;
 
       if (user != null) {
-        final email = user.email!;
-        
-        // 5. Check if user already exists in Firestore by UID
-        UserModel? existingUser = await _firestoreService.getUser(user.uid);
-        
-        // 6. AD-HOC DATA INHERITANCE: If UID match fails, check if an account exists with the same email
+        // Only create a document when this UID is genuinely new. The previous
+        // version searched by email and copied another account's username,
+        // display name and photo onto the new UID — without its friends, hives
+        // or wishes — so users saw their own name and concluded their data had
+        // been deleted, while two accounts claimed the same username.
+        final existingUser = await _firestoreService.getUser(user.uid);
         if (existingUser == null) {
-          final results = await _firestoreService.searchUsers(email);
-          if (results.isNotEmpty) {
-             // We found an account with the same email.
-             // Inherit their existing profile data to ensure consistency.
-             final inherited = results.first;
-             existingUser = inherited;
-             
-             // Create/Update the new Google UID record with inherited data
-             await _firestoreService.updateUser(UserModel(
-               uid: user.uid,
-               email: email,
-               username: inherited.username,
-               displayName: inherited.displayName,
-               photoUrl: inherited.photoUrl, // Keep existing pic!
-             ));
-          }
-        }
-        
-        if (existingUser == null) {
-          // Truly New user: Create with Google info
           await _firestoreService.updateUser(UserModel(
             uid: user.uid,
-            email: email,
+            email: user.email ?? '',
             displayName: user.displayName ?? 'User',
             photoUrl: user.photoURL,
           ));
@@ -70,6 +50,15 @@ class AuthService {
       }
 
       return user;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'account-exists-with-different-credential') {
+        throw Exception(
+          'An account already exists with this email. Sign in with your '
+          'original method first, then link Google from Settings.',
+        );
+      }
+      debugPrint('Error during Google Sign-In: ${e.code} ${e.message}');
+      rethrow;
     } catch (e) {
       debugPrint('Error during Google Sign-In: $e');
       rethrow;
