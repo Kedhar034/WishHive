@@ -55,6 +55,21 @@ service cloud.firestore {
     }
 
     // Editors of a hive, read from the hive document itself.
+    // Written only by the convertWishLink function. A contributor who could set
+    // these could point the Buy button of someone else's wish anywhere.
+    function affiliateFields() {
+      return ['affiliateLink', 'affiliateFor', 'affiliateStatus', 'affiliateCheckedAt'];
+    }
+
+    function createsNoAffiliateFields() {
+      return !request.resource.data.keys().hasAny(affiliateFields());
+    }
+
+    function keepsAffiliateFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(affiliateFields());
+    }
+
     function hiveEditors(ownerId, hiveId) {
       return get(/databases/$(database)/documents/users/$(ownerId)/hives/$(hiveId))
                .data.get('allowedEditorIds', []);
@@ -115,9 +130,10 @@ service cloud.firestore {
         // Owner, or a friend listed as an editor on the target hive.
         // This is the first server-side enforcement of the editor role —
         // previously it was only a Dart getter deciding whether to draw a button.
-        allow create: if me() == uid
-                      || (signedIn()
-                          && me() in hiveEditors(uid, request.resource.data.hiveId));
+        allow create: if createsNoAffiliateFields()
+                      && (me() == uid
+                          || (signedIn()
+                              && me() in hiveEditors(uid, request.resource.data.hiveId)));
 
         // The owner, or the friend who contributed the wish.
         allow delete: if me() == uid
@@ -125,11 +141,12 @@ service cloud.firestore {
 
         // Owner and contributor edit freely. Everyone else may ONLY claim or
         // unclaim — they cannot change a wish's name, price, link or note.
-        allow update: if me() == uid
-                      || me() == resource.data.get('addedByUid', '')
-                      || (signedIn()
-                          && request.resource.data.diff(resource.data).affectedKeys()
-                               .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen']));
+        allow update: if keepsAffiliateFields()
+                      && (me() == uid
+                          || me() == resource.data.get('addedByUid', '')
+                          || (signedIn()
+                              && request.resource.data.diff(resource.data).affectedKeys()
+                                   .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen'])));
       }
     }
 
@@ -224,17 +241,19 @@ service cloud.firestore {
         allow read: if me() in hive().get('audienceIds', [])
                     || hive().get('isPublic', false) == true;
 
-        allow create: if me() == hive().ownerId
-                      || me() in hive().get('editorIds', []);
+        allow create: if createsNoAffiliateFields()
+                      && (me() == hive().ownerId
+                          || me() in hive().get('editorIds', []));
 
         allow delete: if me() == hive().ownerId
                       || me() == resource.data.get('addedByUid', '');
 
-        allow update: if me() == hive().ownerId
-                      || me() == resource.data.get('addedByUid', '')
-                      || (me() in hive().get('audienceIds', [])
-                          && request.resource.data.diff(resource.data).affectedKeys()
-                               .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen']));
+        allow update: if keepsAffiliateFields()
+                      && (me() == hive().ownerId
+                          || me() == resource.data.get('addedByUid', '')
+                          || (me() in hive().get('audienceIds', [])
+                              && request.resource.data.diff(resource.data).affectedKeys()
+                                   .hasOnly(['fulfilledBy', 'fulfilledByName', 'ownerSeen'])));
       }
     }
 
@@ -254,6 +273,7 @@ service cloud.firestore {
 
     // ─── everything else ────────────────────────────────────────────────────
     // Explicit for clarity; Firestore denies unmatched paths by default.
+    // productCache, productUsage and system are Cloud Functions only.
 
     match /{document=**} {
       allow read, write: if false;

@@ -66,7 +66,8 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
 
         // A link that arrived while signed out is held until now.
         ShareLinkService.instance.onSignedIn();
-        
+        ref.read(uploadServiceProvider.notifier).adoptLocalHiveCovers(user.uid);
+
         // User is logged in, check Firestore profile
         final userProfileAsync = ref.watch(currentUserStreamProvider);
         

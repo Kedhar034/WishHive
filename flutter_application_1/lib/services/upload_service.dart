@@ -7,33 +7,61 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'image_storage_service.dart';
 
+/// What a pending upload belongs to, which decides the Storage folder and the
+/// document that receives the download URL.
+enum UploadKind { wish, hiveCover }
+
 /// Represents a pending upload task.
 class UploadTask {
-  final String wishId;
+  final String docId;
   final String localPath;
   final String userId;
+  final UploadKind kind;
   final int attempt;
 
   UploadTask({
-    required this.wishId,
+    required this.docId,
     required this.localPath,
     required this.userId,
+    this.kind = UploadKind.wish,
     this.attempt = 0,
   });
 
   Map<String, dynamic> toJson() => {
-        'wishId': wishId,
+        'docId': docId,
         'localPath': localPath,
         'userId': userId,
+        'kind': kind.name,
         'attempt': attempt,
       };
 
+  // Tasks persisted before hive covers existed carry `wishId` and no kind.
   factory UploadTask.fromJson(Map<String, dynamic> j) => UploadTask(
-        wishId: j['wishId'] as String,
+        docId: (j['docId'] ?? j['wishId']) as String,
         localPath: j['localPath'] as String,
         userId: j['userId'] as String,
+        kind: j['kind'] == UploadKind.hiveCover.name
+            ? UploadKind.hiveCover
+            : UploadKind.wish,
         attempt: (j['attempt'] as num?)?.toInt() ?? 0,
       );
+
+  UploadTask retried() => UploadTask(
+        docId: docId,
+        localPath: localPath,
+        userId: userId,
+        kind: kind,
+        attempt: attempt + 1,
+      );
+
+  DocumentReference<Map<String, dynamic>> get docRef =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection(kind == UploadKind.hiveCover ? 'hives' : 'wishes')
+          .doc(docId);
+
+  String get storageFolder => kind == UploadKind.hiveCover ? 'hives' : 'wishes';
 }
 
 
@@ -96,14 +124,51 @@ class UploadService extends Notifier<List<UploadTask>> {
 
   /// Add a new upload task to the queue.
   void addToQueue(String wishId, File imageFile, String userId) {
-    debugPrint('[UploadService] Adding to queue: Wish=$wishId, Path=${imageFile.path}');
+    _enqueue(UploadTask(docId: wishId, localPath: imageFile.path, userId: userId));
+  }
 
-    final task = UploadTask(
-      wishId: wishId,
+  /// Queues a hive cover. The hive document keeps the local path until the
+  /// upload lands, so the owner sees the picture immediately.
+  void addHiveCover(String hiveId, File imageFile, String userId) {
+    final queued = state.any((t) =>
+        t.kind == UploadKind.hiveCover &&
+        t.docId == hiveId &&
+        t.localPath == imageFile.path);
+    if (queued) return;
+    _enqueue(UploadTask(
+      docId: hiveId,
       localPath: imageFile.path,
       userId: userId,
-    );
+      kind: UploadKind.hiveCover,
+    ));
+  }
 
+  final Set<String> _adoptedFor = {};
+
+  /// Covers picked before hive covers were uploaded were saved as a path on the
+  /// owner's phone, which no friend and no link preview can load. Any such file
+  /// still on this device is queued once per sign-in.
+  Future<void> adoptLocalHiveCovers(String userId) async {
+    if (!_adoptedFor.add(userId)) return;
+    try {
+      final hives = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('hives')
+          .get();
+      for (final doc in hives.docs) {
+        final path = doc.data()['imageUrl'] as String? ?? '';
+        if (!ImageStorageService.isLocalPath(path)) continue;
+        if (!File(path).existsSync()) continue;
+        addHiveCover(doc.id, File(path), userId);
+      }
+    } catch (e) {
+      debugPrint('[UploadService] Adopting local hive covers failed: $e');
+    }
+  }
+
+  void _enqueue(UploadTask task) {
+    debugPrint('[UploadService] Adding to queue: ${task.kind.name}=${task.docId}, Path=${task.localPath}');
     state = [...state, task];
     _persist();
     _processQueue();
@@ -117,7 +182,7 @@ class UploadService extends Notifier<List<UploadTask>> {
     final task = state.first;
 
     try {
-      debugPrint('[UploadService] Starting upload via service for wish: ${task.wishId}');
+      debugPrint('[UploadService] Starting upload for ${task.kind.name}: ${task.docId}');
       
       final file = File(task.localPath);
       if (!await file.exists()) {
@@ -150,18 +215,26 @@ class UploadService extends Notifier<List<UploadTask>> {
       }
 
       // 2. Upload to Firebase Storage
-      final downloadUrl = await ImageStorageService.uploadImage(fileToUpload, task.userId);
-      
+      final downloadUrl = await ImageStorageService.uploadImage(
+        fileToUpload,
+        task.userId,
+        folder: task.storageFolder,
+      );
+
       // 3. Update Firestore Document
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(task.userId)
-          .collection('wishes')
-          .doc(task.wishId)
-          .update({'imageUrl': downloadUrl});
-      
-      debugPrint('[UploadService] Success! Updated wish ${task.wishId} with URL: $downloadUrl');
-      
+      if (task.kind == UploadKind.hiveCover) {
+        // The owner may have picked another cover, or removed it, while this
+        // one was uploading. Only replace the path this task was queued for.
+        final current = await task.docRef.get();
+        if (current.exists && current.data()?['imageUrl'] == task.localPath) {
+          await task.docRef.update({'imageUrl': downloadUrl});
+        }
+      } else {
+        await task.docRef.update({'imageUrl': downloadUrl});
+      }
+
+      debugPrint('[UploadService] Success! Updated ${task.kind.name} ${task.docId} with URL: $downloadUrl');
+
       // 4. Remove from queue and delete local files
       _removeFromQueue(task);
       
@@ -177,7 +250,7 @@ class UploadService extends Notifier<List<UploadTask>> {
       }
 
     } catch (e) {
-      debugPrint('[UploadService] Upload failed for ${task.wishId}: $e');
+      debugPrint('[UploadService] Upload failed for ${task.docId}: $e');
       // Simple retry logic: move to end of queue or keep it?
       // For now, let's remove it to avoid blocking the queue forever, 
       // or we could implement a retry counter.
@@ -185,17 +258,12 @@ class UploadService extends Notifier<List<UploadTask>> {
       if (task.attempt < 3) {
          debugPrint('[UploadService] Retrying later...');
          _removeFromQueue(task);
-         state = [...state, UploadTask(
-            wishId: task.wishId,
-            localPath: task.localPath,
-            userId: task.userId,
-            attempt: task.attempt + 1
-         )];
+         state = [...state, task.retried()];
          _persist();
          // Back off so a persistent failure does not spin the queue.
          await Future.delayed(Duration(seconds: 2 << task.attempt));
       } else {
-         debugPrint('[UploadService] Max retries reached. Giving up on ${task.wishId}');
+         debugPrint('[UploadService] Max retries reached. Giving up on ${task.docId}');
          _removeFromQueue(task);
       }
     } finally {

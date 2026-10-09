@@ -5,12 +5,15 @@ import {
 } from "firebase-functions/v2/firestore";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, DocumentData } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
 
 initializeApp();
 const db = getFirestore();
+
+export { resolveProduct } from "./product";
+export { convertWishLink, retryAffiliateLinks } from "./affiliate";
 
 setGlobalOptions({ region: "asia-south1", maxInstances: 10 });
 
@@ -260,6 +263,12 @@ export const onWishWrite = onDocumentWritten(
   async (event) => {
     const hiveId = event.params.hiveId;
 
+    // Claims, affiliate links and text edits change neither total, and
+    // recounting the whole hive for each of them is a read per wish.
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (before && after && Number(before.cost) === Number(after.cost)) return;
+
     const wishes = await db.collection(`hives/${hiveId}/wishes`).get();
     let itemCount = 0;
     let totalCost = 0;
@@ -310,6 +319,11 @@ export const onHiveDelete = onDocumentDeleted(
         batch.delete(w.ref);
       }
       await batch.commit();
+    }
+
+    const cover = data?.imageUrl as string | undefined;
+    if (cover?.startsWith("https://firebasestorage.googleapis.com/")) {
+      imagePaths.push(cover);
     }
 
     const ownerId = data?.ownerId;
@@ -463,6 +477,43 @@ export const removeFriend = onCall(async (request) => {
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.wishhive.app";
 
+const SHARE_ORIGIN = "https://flutterapplication-77c19.web.app";
+
+// Served from Hosting (public/og-banner.jpg) for hives with nothing to show.
+const FALLBACK_IMAGE = `${SHARE_ORIGIN}/og-banner.jpg`;
+
+// The Play Store hands `referrer` to the app on first launch, which is how a
+// new install opens the hive it was shared instead of an empty home screen.
+const playStoreUrl = (shareId: string) =>
+  shareId
+    ? `${PLAY_STORE_URL}&referrer=${encodeURIComponent(`share=${shareId}`)}`
+    : PLAY_STORE_URL;
+
+const isWebImage = (url: unknown): url is string =>
+  typeof url === "string" && url.startsWith("https://");
+
+// A cover picked on the phone used to be saved as a device path, and built-in
+// covers are app assets, so neither can be shown on the web. The first wish
+// photo stands in only while the owner has the link turned on, since the page
+// promises metadata and a photo is a glimpse of the list itself.
+async function previewImage(
+  hiveId: string,
+  hive: DocumentData
+): Promise<string> {
+  if (isWebImage(hive.imageUrl)) return hive.imageUrl;
+  if (hive.linkShareEnabled === true) {
+    const wishes = await db
+      .collection(`hives/${hiveId}/wishes`)
+      .limit(20)
+      .get();
+    const photo = wishes.docs
+      .map((w) => w.data().imageUrl)
+      .find(isWebImage);
+    if (photo) return photo;
+  }
+  return FALLBACK_IMAGE;
+}
+
 const escapeHtml = (s: string) =>
   String(s)
     .replace(/&/g, "&amp;")
@@ -476,10 +527,19 @@ function landingHtml(opts: {
   description: string;
   image: string;
   url: string;
+  shareId?: string;
 }) {
   const t = escapeHtml(opts.title);
   const d = escapeHtml(opts.description);
   const img = escapeHtml(opts.image);
+  const u = escapeHtml(opts.url);
+  const store = playStoreUrl(opts.shareId ?? "");
+  // Link-preview bots never run scripts, so they still read the tags above.
+  // Only Android browsers are sent on, because the app is Android-only; a
+  // phone with the app installed never gets here, App Links opens it first.
+  const redirect = opts.shareId
+    ? `<script>if(/Android/i.test(navigator.userAgent)){location.replace(${JSON.stringify(store)})}</script>`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -490,11 +550,13 @@ function landingHtml(opts: {
 <meta property="og:site_name" content="WishHive">
 <meta property="og:title" content="${t}">
 <meta property="og:description" content="${d}">
+${u ? `<meta property="og:url" content="${u}">` : ""}
 ${img ? `<meta property="og:image" content="${img}">` : ""}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${t}">
 <meta name="twitter:description" content="${d}">
 ${img ? `<meta name="twitter:image" content="${img}">` : ""}
+${redirect}
 <style>
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
@@ -523,7 +585,7 @@ body{background:#14161b;color:#e8eaee}
   <div class="body">
     <h1>${t}</h1>
     <p class="meta">${d}</p>
-    <a class="btn" href="${PLAY_STORE_URL}">Get WishHive</a>
+    <a class="btn" href="${escapeHtml(store)}">Get WishHive</a>
     <p class="hint">Already have the app? Open this link on your phone.</p>
   </div>
 </div>
@@ -568,20 +630,19 @@ export const hiveLandingPage = onRequest(
       return;
     }
 
-    const hive = found.docs[0].data();
+    const hiveDoc = found.docs[0];
+    const hive = hiveDoc.data();
     const owner = hive.ownerDisplayName ? ` · shared by ${hive.ownerDisplayName}` : "";
     const count = Number(hive.itemCount) || 0;
     const items = count === 1 ? "1 item" : `${count} items`;
-    const image = String(hive.imageUrl ?? "").startsWith("http")
-      ? String(hive.imageUrl)
-      : "";
 
     res.status(200).send(
       landingHtml({
         title: hive.title ?? "A WishHive list",
         description: `${items}${owner}`,
-        image,
-        url: req.url,
+        image: await previewImage(hiveDoc.id, hive),
+        url: `${SHARE_ORIGIN}/h/${encodeURIComponent(shareId)}`,
+        shareId,
       })
     );
   }

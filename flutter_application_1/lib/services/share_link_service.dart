@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:play_install_referrer/play_install_referrer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firestore_service.dart';
 
@@ -75,6 +77,41 @@ class ShareLinkService {
     } catch (e) {
       debugPrint('[ShareLink] init failed: $e');
     }
+    await _checkInstallReferrer();
+  }
+
+  static const _referrerCheckedKey = 'install_referrer_checked';
+
+  /// Someone without the app who taps a share link is sent to the Play Store
+  /// with `referrer=share=<id>`. Play hands that back once installed, so the
+  /// first launch can open the hive they came for. Checked once per install,
+  /// and only for a fresh install so an app update never replays an old link.
+  Future<void> _checkInstallReferrer() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_referrerCheckedKey) ?? false) return;
+      await prefs.setBool(_referrerCheckedKey, true);
+
+      final details = await PlayInstallReferrer.installReferrer;
+      final installedAt = DateTime.fromMillisecondsSinceEpoch(
+        details.installBeginTimestampSeconds * 1000,
+      );
+      if (DateTime.now().difference(installedAt) > const Duration(days: 7)) {
+        return;
+      }
+
+      final raw = details.installReferrer;
+      if (raw == null || raw.isEmpty) return;
+      final shareId = Uri.splitQueryString(raw)['share']?.trim();
+      if (shareId == null || shareId.isEmpty || _pendingShareId != null) return;
+
+      debugPrint('[ShareLink] install referrer $shareId');
+      _pendingShareId = shareId;
+      if (signedIn) _drain();
+    } catch (e) {
+      debugPrint('[ShareLink] install referrer unavailable: $e');
+    }
   }
 
   bool _seenFromStream = false;
@@ -105,6 +142,13 @@ class ShareLinkService {
   void onSignedIn() {
     signedIn = true;
     _drain();
+  }
+
+  /// Opens a hive from a link found inside the app, such as one pasted into
+  /// the Add Wish sheet, through the same path as tapping it.
+  void openFromApp(String shareId) {
+    _pendingShareId = shareId;
+    if (signedIn) _drain();
   }
 
   void _drain() {

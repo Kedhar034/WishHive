@@ -38,6 +38,14 @@ class UpdateService {
       final minVersion = _remoteConfig.getString('min_version');
       final latestVersion = _remoteConfig.getString('latest_version');
 
+      // Remote Config fails quietly by design: a bad fetch just leaves the
+      // defaults in place. Without this line there is no way to tell a
+      // "you are up to date" from a fetch that never reached the server.
+      debugPrint('UpdateService: installed=$currentVersion '
+          'min=$minVersion latest=$latestVersion '
+          'fetch=${_remoteConfig.lastFetchStatus} '
+          'at=${_remoteConfig.lastFetchTime}');
+
       if (_isLowerVersion(currentVersion, minVersion)) {
         return UpdateStatus.forceUpdate;
       } else if (_isLowerVersion(currentVersion, latestVersion)) {

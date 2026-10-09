@@ -75,6 +75,7 @@ dependencies:
   firebase_crashlytics: ^5.0.7
   flutter_zoom_drawer: ^3.1.1
   app_links: ^6.3.2
+  play_install_referrer: ^0.5.0
   
 dev_dependencies:
   flutter_test:

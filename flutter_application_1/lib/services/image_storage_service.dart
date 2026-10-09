@@ -70,8 +70,12 @@ class ImageStorageService {
 
   /// Uploads an image to Firebase Storage and returns the download URL.
   /// 
-  /// Storage Path: users/{userId}/wishes/{uuid}.{ext}
-  static Future<String> uploadImage(File imageFile, String userId) async {
+  /// Storage Path: users/{userId}/{folder}/{uuid}.{ext}
+  static Future<String> uploadImage(
+    File imageFile,
+    String userId, {
+    String folder = 'wishes',
+  }) async {
     try {
       final extension = imageFile.path.split('.').last.toLowerCase();
       final fileName = '${_uuid.v4()}.$extension';
@@ -80,7 +84,7 @@ class ImageStorageService {
           .ref()
           .child('users')
           .child(userId)
-          .child('wishes')
+          .child(folder)
           .child(fileName);
 
       // storage.rules requires contentType to match image/*. Setting it

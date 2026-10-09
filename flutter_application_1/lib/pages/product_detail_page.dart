@@ -17,6 +17,7 @@ import '../core/utils/money.dart';
 import '../widgets/hive_title.dart';
 import '../widgets/report_sheet.dart';
 import 'create_wish_sheet.dart';
+import 'wish_detail_sheet.dart';
 
 class ProductDetailPage extends ConsumerStatefulWidget {
   final String title;
@@ -436,7 +437,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                         return _WishGridCard(
                           wish: wish,
                           isOwner: _isOwner,
-                          onToggle: () => _handleWishToggle(wish),
+                          onOpen: () => _openWish(wish),
                           onNoteTap: () => _showNoteViewSheet(context, wish),
                           onImageTap: wish.imageUrl.isEmpty
                               ? null
@@ -451,7 +452,7 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                                     ),
                                   ),
                           onLinkTap: wish.link.isNotEmpty
-                              ? () => _launchUrl(wish.link)
+                              ? () => _launchUrl(wish.buyLink)
                               : null,
                           onEdit: _canModify(wish) ? () => _editWish(wish) : null,
                           onDelete: _canModify(wish) ? () => _confirmDeleteWish(wish) : null,
@@ -477,9 +478,10 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
                         isCompleted: isCompleted,
                         isOwner: _isOwner,
                         onToggle: () => _handleWishToggle(wish),
+                        onOpen: () => _openWish(wish),
                         onNoteTap: () => _showNoteViewSheet(context, wish),
                         onLinkTap: wish.link.isNotEmpty
-                            ? () => _launchUrl(wish.link)
+                            ? () => _launchUrl(wish.buyLink)
                             : null,
                         onEdit: _canModify(wish) ? () => _editWish(wish) : null,
                         onDelete: _canModify(wish) ? () => _confirmDeleteWish(wish) : null,
@@ -564,6 +566,22 @@ class _ProductDetailPageState extends ConsumerState<ProductDetailPage> {
         );
       }
     }
+  }
+
+  void _openWish(WishModel wish) {
+    if (_isOwner && wish.fulfilledBy.isNotEmpty && !wish.ownerSeen) {
+      ref.read(firestoreServiceProvider).markWishSeen(wish.id);
+    }
+    WishDetailSheet.show(
+      context,
+      wish: wish,
+      hiveOwnerId: _hiveOwnerId(),
+      canModify: _canModify(wish),
+      onToggle: _handleWishToggle,
+      onEdit: _editWish,
+      onDelete: _confirmDeleteWish,
+      onOpenLink: _launchUrl,
+    );
   }
 
   void _editWish(WishModel wish) {
@@ -819,6 +837,7 @@ class _WishTile extends StatefulWidget {
   final bool isCompleted; // Kept for compatibility if used, though we derive from wish
   final bool isOwner;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
   final VoidCallback? onLinkTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
@@ -830,6 +849,7 @@ class _WishTile extends StatefulWidget {
     required this.isCompleted,
     required this.isOwner,
     required this.onToggle,
+    required this.onOpen,
     required this.onLinkTap,
     required this.onEdit,
     required this.onDelete,
@@ -1007,17 +1027,24 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
           borderRadius: BorderRadius.circular(18),
         ),
         child: InkWell(
-          onTap: widget.onToggle, // Allow everyone to toggle (owner logic handled in callback)
+          // Opens the wish. Fulfilling it is the tick on the left, so seeing
+          // the details can no longer cross it off by accident.
+          onTap: widget.onOpen,
           onLongPress: widget.isOwner ? widget.onEdit : null, // Edit on long press for owner
           borderRadius: BorderRadius.circular(18),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                if (!widget.isOwner)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: ScaleTransition(
+                Semantics(
+                  button: true,
+                  label: isCompleted ? 'Mark as not fulfilled' : 'Mark as fulfilled',
+                  child: InkResponse(
+                    onTap: widget.onToggle,
+                    radius: 22,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
+                      child: ScaleTransition(
                       scale: _scaleAnimation,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -1039,8 +1066,10 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                             ? const Icon(Icons.check, size: 16, color: Colors.white)
                             : null,
                       ),
+                      ),
                     ),
                   ),
+                ),
                 
                 if (widget.wish.imageUrl.isNotEmpty) ...[
                    Hero(
@@ -1120,6 +1149,8 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                           Expanded(
                             child: Text(
                               widget.wish.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyLarge?.copyWith(
                                 decoration: isCompleted
                                     ? TextDecoration.lineThrough
@@ -1130,6 +1161,34 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                               ),
                             ),
                           ),
+                          if (widget.wish.cost > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    formatMoney(widget.wish.cost),
+                                    style: theme.textTheme.labelMedium?.copyWith(
+                                      color: isCompleted
+                                          ? Colors.grey
+                                          : theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  // A store price is a snapshot; the date says
+                                  // so where the price is read.
+                                  if (widget.wish.priceFetchedAt != null)
+                                    Text(
+                                      'as of ${formatPriceDate(widget.wish.priceFetchedAt!)}',
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        fontSize: 10,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                       if (isCompleted)
@@ -1181,12 +1240,6 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
                         visualDensity: VisualDensity.compact,
                       ),
                     if (widget.isOwner) ...[
-                      if (isCompleted)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 4),
-                          child: Icon(Icons.check_circle,
-                              size: 20, color: AppTheme.success),
-                        ),
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
                         onSelected: (val) {
@@ -1213,7 +1266,7 @@ class _WishTileState extends State<_WishTile> with SingleTickerProviderStateMixi
 class _WishGridCard extends StatelessWidget {
   final WishModel wish;
   final bool isOwner;
-  final VoidCallback onToggle;
+  final VoidCallback onOpen;
   final VoidCallback onNoteTap;
   final VoidCallback? onLinkTap;
 
@@ -1228,7 +1281,7 @@ class _WishGridCard extends StatelessWidget {
   const _WishGridCard({
     required this.wish,
     required this.isOwner,
-    required this.onToggle,
+    required this.onOpen,
     required this.onNoteTap,
     required this.onLinkTap,
     this.onImageTap,
@@ -1355,7 +1408,7 @@ class _WishGridCard extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onToggle,
+            onTap: onOpen,
             onLongPress: isOwner ? onEdit : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1486,7 +1539,9 @@ class _WishGridCard extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Text(
-                                  '₹${wish.cost.toStringAsFixed(0)}',
+                                  wish.priceFetchedAt != null
+                                      ? '${formatMoney(wish.cost)} · ${formatPriceDate(wish.priceFetchedAt!)}'
+                                      : formatMoney(wish.cost),
                                   style: theme.textTheme.labelMedium?.copyWith(
                                     color: theme.colorScheme.primary,
                                     fontWeight: FontWeight.bold,

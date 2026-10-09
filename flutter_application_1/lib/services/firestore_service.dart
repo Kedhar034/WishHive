@@ -855,6 +855,9 @@ class FirestoreService {
         'date': wish.date != null ? Timestamp.fromDate(wish.date!) : null,
         'fulfilledBy': wish.fulfilledBy,
         'fulfilledByName': wish.fulfilledByName,
+        'priceFetchedAt': wish.priceFetchedAt != null
+            ? Timestamp.fromDate(wish.priceFetchedAt!)
+            : null,
       });
 
       if (oldHiveId == wish.hiveId) {
@@ -878,6 +881,42 @@ class FirestoreService {
     } catch (e) {
       debugPrint('Error updating wish: $e');
       rethrow;
+    }
+  }
+
+  /// Writes details fetched from the store onto an existing wish, touching
+  /// only those fields so a claim made meanwhile is never overwritten.
+  Future<void> applyFetchedDetails({
+    required String ownerId,
+    required String wishId,
+    double? price,
+    DateTime? priceFetchedAt,
+    String? imageUrl,
+    List<String>? images,
+  }) async {
+    final ref = _wishesCollection(ownerId).doc(wishId);
+    final before = await ref.get();
+    if (!before.exists) throw Exception('Wish not found');
+    final data = before.data() as Map<String, dynamic>;
+
+    final update = <String, dynamic>{};
+    if (price != null && price > 0) {
+      update['cost'] = price;
+      update['priceFetchedAt'] =
+          Timestamp.fromDate(priceFetchedAt ?? DateTime.now());
+    }
+    if (imageUrl != null && imageUrl.isNotEmpty) update['imageUrl'] = imageUrl;
+    if (images != null && images.isNotEmpty) update['images'] = images;
+    if (update.isEmpty) return;
+
+    await ref.update(update);
+
+    final oldCost = (data['cost'] as num?)?.toDouble() ?? 0.0;
+    final hiveId = data['hiveId'] as String? ?? '';
+    if (update.containsKey('cost') && hiveId.isNotEmpty && price != oldCost) {
+      await _hivesCollection(ownerId).doc(hiveId).update({
+        'totalCost': FieldValue.increment(price! - oldCost),
+      });
     }
   }
 

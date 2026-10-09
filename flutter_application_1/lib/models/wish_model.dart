@@ -22,6 +22,14 @@ class WishModel {
   final String addedByName; // Display name of who added this wish
   final bool isNote; // Whether this is a text note instead of a product wish
 
+  /// When the price was read from the store. Null when the user typed it, so
+  /// only a fetched price is labelled "as of".
+  final DateTime? priceFetchedAt;
+
+  /// Set by the convertWishLink Cloud Function, never by the app.
+  final String affiliateLink;
+  final String affiliateStatus;
+
   WishModel({
     required this.id,
     required this.name,
@@ -41,7 +49,21 @@ class WishModel {
     this.addedByUid = '',
     this.addedByName = '',
     this.isNote = false,
+    this.priceFetchedAt,
+    this.affiliateLink = '',
+    this.affiliateStatus = '',
   });
+
+  /// The link the Buy button opens: the affiliate one when the store converted
+  /// it, otherwise the original the user shared.
+  String get buyLink => affiliateLink.isNotEmpty ? affiliateLink : link;
+
+  /// "amazon.in" from the original link, which is what people recognise —
+  /// never the redirect domain of the affiliate link.
+  String get storeName {
+    final host = Uri.tryParse(link)?.host.toLowerCase() ?? '';
+    return host.startsWith('www.') ? host.substring(4) : host;
+  }
 
   factory WishModel.fromFirestore(DocumentSnapshot doc) =>
       WishModel.fromMap(doc.data() as Map<String, dynamic>? ?? {}, doc.id);
@@ -68,6 +90,9 @@ class WishModel {
       addedByUid: data['addedByUid'] as String? ?? '',
       addedByName: data['addedByName'] as String? ?? '',
       isNote: data['isNote'] as bool? ?? false,
+      priceFetchedAt: _parseDate(data['priceFetchedAt']),
+      affiliateLink: data['affiliateLink'] as String? ?? '',
+      affiliateStatus: data['affiliateStatus'] as String? ?? '',
     );
   }
 
@@ -90,6 +115,8 @@ class WishModel {
       'addedByUid': addedByUid,
       'addedByName': addedByName,
       'isNote': isNote,
+      'priceFetchedAt':
+          priceFetchedAt != null ? Timestamp.fromDate(priceFetchedAt!) : null,
     };
   }
 
@@ -112,6 +139,7 @@ class WishModel {
     String? addedByUid,
     String? addedByName,
     bool? isNote,
+    DateTime? Function()? priceFetchedAt,
   }) {
     return WishModel(
       id: id ?? this.id,
@@ -132,6 +160,11 @@ class WishModel {
       addedByUid: addedByUid ?? this.addedByUid,
       addedByName: addedByName ?? this.addedByName,
       isNote: isNote ?? this.isNote,
+      // A function so a caller can clear it to null, which ?? cannot express.
+      priceFetchedAt:
+          priceFetchedAt != null ? priceFetchedAt() : this.priceFetchedAt,
+      affiliateLink: affiliateLink,
+      affiliateStatus: affiliateStatus,
     );
   }
 

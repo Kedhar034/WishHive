@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,15 +7,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/wish_model.dart';
 import '../services/firestore_service.dart';
 import '../services/image_storage_service.dart';
-import '../services/affiliate_service.dart';
+import '../services/metadata_service.dart';
+import '../services/product_lookup_service.dart';
+import '../services/share_link_service.dart';
 import '../services/wish_image_service.dart';
 import '../widgets/image_picker_widget.dart';
 import '../providers/providers.dart';
 import '../core/constants/app_constants.dart';
 import '../widgets/custom_snackbar.dart';
 import '../core/theme/app_theme.dart';
+import '../core/utils/money.dart';
+import '../widgets/fetch_details_chip.dart';
 
-/// Bottom sheet for creating/editing a wish.
 /// Bottom sheet for creating/editing a wish.
 class CreateWishSheet extends ConsumerStatefulWidget {
   final String? initialLink;
@@ -65,6 +69,20 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
   bool _isLoading = false;
   bool _isNote = false;
 
+  // ─── product details ───
+  Timer? _linkDebounce;
+  String _lastLookedUpLink = '';
+  bool _readingLink = false;
+  bool _fetchingFull = false;
+  String? _fetchGaveUpFor;
+  String? _hiveShareId;
+  List<String> _scrapedImages = const [];
+
+  /// The price as read from the store and when. A price the user typed or
+  /// changed is theirs, so it is saved without an "as of" date.
+  double? _fetchedPrice;
+  DateTime? _priceFetchedAt;
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +124,26 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
     }
 
     _selectedHiveId = wish?.hiveId ?? widget.preselectedHiveId;
+
+    if (wish != null) {
+      _lastLookedUpLink = wish.link;
+      if (wish.priceFetchedAt != null) {
+        _fetchedPrice = wish.cost;
+        _priceFetchedAt = wish.priceFetchedAt;
+      }
+    } else if (widget.initialLink != null && widget.initialLink!.isNotEmpty) {
+      // Shared in from another app: the phone already read the page.
+      _lastLookedUpLink = widget.initialLink!.trim();
+      _scrapedImages = widget.initialImages ?? const [];
+      if (widget.initialCost != null && widget.initialCost! > 0) {
+        _fetchedPrice = widget.initialCost;
+        _priceFetchedAt = DateTime.now();
+      }
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _fillFromCache(_lastLookedUpLink),
+      );
+    }
+    _costController.addListener(_onDetailsEdited);
     
     // Handle image initialization for Edit Mode
     if (wish != null && wish.imageUrl.isNotEmpty) {
@@ -129,6 +167,8 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
 
   @override
   void dispose() {
+    _linkDebounce?.cancel();
+    _costController.removeListener(_onDetailsEdited);
     _nameController.dispose();
     _subtitleController.dispose();
     _dateController.dispose();
@@ -137,6 +177,163 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
     _costController.dispose();
     _quantityController.dispose();
     super.dispose();
+  }
+
+  void _onDetailsEdited() {
+    if (mounted) setState(() {});
+  }
+
+  String get _link => _urlController.text.trim();
+
+  bool get _missingPrice => _costController.text.trim().isEmpty;
+
+  // A bundled asset is the automatic placeholder picture, not a product photo.
+  bool get _missingImage =>
+      _selectedImage == null &&
+      ((_networkImageUrl ?? '').isEmpty ||
+          ImageStorageService.isAssetPath(_networkImageUrl!));
+
+  bool get _showFetchChip =>
+      !_isNote &&
+      _hiveShareId == null &&
+      !_readingLink &&
+      (_missingPrice || _missingImage) &&
+      _fetchGaveUpFor != _link &&
+      ProductLookupService.canFetchDetails(_link);
+
+  String get _fetchChipLabel {
+    if (_missingPrice && _missingImage) return 'Get price & photo';
+    return _missingPrice ? 'Get price' : 'Get photo';
+  }
+
+  void _onLinkChanged(String _) {
+    _linkDebounce?.cancel();
+    _linkDebounce = Timer(const Duration(milliseconds: 600), _lookUpLink);
+    setState(() {});
+  }
+
+  /// Runs once the link stops changing: a WishHive hive link is routed to the
+  /// hive, a product link is read by the phone and checked against the cache.
+  Future<void> _lookUpLink() async {
+    final link = _link;
+    if (link == _lastLookedUpLink) return;
+    _lastLookedUpLink = link;
+
+    final uri = Uri.tryParse(link);
+    final shareId = uri == null ? null : ShareLinkService.shareIdFrom(uri);
+    setState(() => _hiveShareId = shareId);
+    if (shareId != null || !ProductLookupService.looksLikeUrl(link)) return;
+
+    setState(() => _readingLink = true);
+    final needsPhone = _nameController.text.trim().isEmpty ||
+        _missingPrice ||
+        _missingImage;
+    final results = await Future.wait<Object?>([
+      needsPhone ? MetadataService.extract(link) : Future.value(null),
+      ProductLookupService.cached(link),
+    ]);
+    if (!mounted) return;
+    if (_link != link) {
+      setState(() => _readingLink = false);
+      return;
+    }
+
+    final scraped = results[0] as LinkMetadata?;
+    if (scraped != null) {
+      _fill(
+        title: scraped.title,
+        price: scraped.hasPrice ? scraped.price : null,
+        imageUrl: scraped.imageUrl,
+        images: scraped.images,
+        fetchedAt: DateTime.now(),
+      );
+    }
+    final cached = results[1] as ProductLookupResult;
+    if (cached.isFound) _fillFromProduct(cached.product!);
+    setState(() => _readingLink = false);
+  }
+
+  Future<void> _fillFromCache(String link) async {
+    final cached = await ProductLookupService.cached(link);
+    if (!mounted || _link != link || !cached.isFound) return;
+    _fillFromProduct(cached.product!);
+  }
+
+  /// The user tapped the chip. Only empty fields are filled; anything they
+  /// typed stays as they typed it.
+  Future<void> _fetchFullDetails() async {
+    final link = _link;
+    setState(() => _fetchingFull = true);
+    final result = await ProductLookupService.fetch(link);
+    if (!mounted) return;
+    setState(() => _fetchingFull = false);
+    if (_link != link) return;
+
+    if (result.status == LookupStatus.limitReached) {
+      CustomSnackBar.showError(
+          context, result.message ?? 'Daily limit reached. Try again tomorrow.');
+      return;
+    }
+    if (!result.isFound) {
+      setState(() => _fetchGaveUpFor = link);
+      CustomSnackBar.showError(
+        context,
+        "Couldn't get details from this store. You can add them yourself.",
+      );
+      return;
+    }
+
+    final filled = _fillFromProduct(result.product!);
+    if (_missingPrice || _missingImage) setState(() => _fetchGaveUpFor = link);
+    if (filled.isEmpty) {
+      CustomSnackBar.showError(context, 'No new details found for this product.');
+    } else {
+      CustomSnackBar.showSuccess(context, 'Added ${filled.join(' and ')}.');
+    }
+  }
+
+  List<String> _fillFromProduct(FetchedProduct product) => _fill(
+        title: product.title,
+        price: product.price,
+        imageUrl: product.mainImage,
+        images: product.images,
+        fetchedAt: product.fetchedAt,
+      );
+
+  List<String> _fill({
+    String? title,
+    double? price,
+    String? imageUrl,
+    List<String> images = const [],
+    required DateTime fetchedAt,
+  }) {
+    final filled = <String>[];
+    final name = title?.trim() ?? '';
+    if (_nameController.text.trim().isEmpty && name.isNotEmpty) {
+      _nameController.text =
+          name.length > 80 ? '${name.substring(0, 80)}...' : name;
+      filled.add('name');
+    }
+    if (_missingPrice && price != null && price > 0) {
+      _fetchedPrice = price;
+      _priceFetchedAt = fetchedAt;
+      _costController.text = price.toStringAsFixed(price % 1 == 0 ? 0 : 2);
+      filled.add('price');
+    }
+    if (_missingImage && imageUrl != null && imageUrl.isNotEmpty) {
+      _networkImageUrl = imageUrl;
+      _scrapedImages = images.isNotEmpty ? images : [imageUrl];
+      filled.add('photo');
+    }
+    if (filled.isNotEmpty && mounted) setState(() {});
+    return filled;
+  }
+
+  /// Kept only while the cost is still the one read from the store.
+  DateTime? _priceDateFor(double cost) {
+    final fetched = _fetchedPrice;
+    if (fetched == null || _priceFetchedAt == null) return null;
+    return (cost - fetched).abs() < 0.005 ? _priceFetchedAt : null;
   }
 
   Future<void> _selectDate() async {
@@ -177,6 +374,12 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
 
   Future<void> _saveWish() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_isNote && _hiveShareId != null) {
+      CustomSnackBar.showError(context,
+          "That's a WishHive hive link. Open it instead of saving it as a wish.");
+      return;
+    }
 
     if (_selectedHiveId == null) {
       CustomSnackBar.showError(context, 'Please select a Hive');
@@ -249,6 +452,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
           link: originalLink,
           cost: cost,
           isNote: _isNote,
+          priceFetchedAt: () => _isNote ? null : _priceDateFor(cost),
         );
         await FirestoreService().updateWish(updatedWish, ownerId: _wishOwnerId());
         
@@ -267,9 +471,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
           imageUrl: imageUrl,
           // Only keep the scraped gallery when the user has not replaced the
           // picture with one of their own.
-          images: (_selectedImage == null && widget.initialImages != null)
-              ? widget.initialImages!
-              : const [],
+          images: _selectedImage == null ? _scrapedImages : const [],
           hiveId: _selectedHiveId!,
           date: date,
           quantity: quantity,
@@ -279,6 +481,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
           isNote: _isNote,
           addedByUid: widget.addedByUid ?? '',
           addedByName: widget.addedByName ?? '',
+          priceFetchedAt: _isNote ? null : _priceDateFor(cost),
         );
 
         String newId;
@@ -299,51 +502,7 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
         }
       }
 
-      // 3. Process Affiliate Link in Background (Eventual Consistency)
-      if (!_isNote && originalLink.isNotEmpty) {
-        // Only check if it's a new link or new wish
-        bool shouldCheck = true;
-        if (widget.wishToEdit != null && widget.wishToEdit!.link == originalLink) {
-          shouldCheck = false;
-        }
-
-        if (shouldCheck) {
-          final affiliateUrl = await AffiliateService.convertToAffiliateLink(originalLink);
-          
-          if (affiliateUrl != null && affiliateUrl != originalLink) {
-            // we need to update the specific document with the new link
-            // For that we need the ID.
-            // If it was an edit, we have the ID.
-            // If it was a create, we don't have the ID unless we change createWish to return it.
-            
-            // For now, let's just support it for Edits or if we can find it.
-            // To properly support it for Create, we should update FirestoreService.createWish to return the docRef.
-            
-            // Assuming createWish generates an ID we might miss it here without refactoring service.
-            // BUT: The user mostly cares about "Edit" speed right now.
-            
-            if (widget.wishToEdit != null) {
-               final reUpdatedWish = widget.wishToEdit!.copyWith(
-                  // We must ensure we use the LATEST values we just saved, 
-                  // but effectively we just want to patch the link.
-                  // Since we are overwriting, we re-construct it.
-                  name: name,
-                  subtitle: subtitle,
-                  imageUrl: imageUrl,
-                  hiveId: _selectedHiveId!,
-                  date: date,
-                  quantity: quantity,
-                  note: note,
-                  link: affiliateUrl, // NEW LINK
-                  cost: cost,
-               );
-               await FirestoreService().updateWish(reUpdatedWish, ownerId: _wishOwnerId());
-               debugPrint('Background update: Link replaced with affiliate url');
-            }
-          }
-        }
-      }
-
+      // The affiliate link is added by the convertWishLink Cloud Function.
     } catch (e) {
       debugPrint("Background save error: $e");
       if (mounted && _isLoading) {
@@ -353,6 +512,80 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
     } finally {
        // Loading state handled in catch or via pop
     }
+  }
+
+  String? get _costHelper {
+    final cost = double.tryParse(_costController.text.trim());
+    if (cost == null) return null;
+    final at = _priceDateFor(cost);
+    return at == null ? null : 'Store price as of ${formatPriceDate(at)}';
+  }
+
+  /// Under the link field: the hive-link notice, a reading indicator, or the
+  /// offer to fetch what the phone could not read.
+  Widget _linkStatus(ThemeData theme) {
+    if (_hiveShareId != null) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: AppTheme.brandBlue.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.hive_outlined, size: 18, color: AppTheme.brandBlue),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('This is a link to a WishHive hive, not a product.'),
+            ),
+            TextButton(
+              onPressed: () {
+                final id = _hiveShareId!;
+                Navigator.pop(context);
+                ShareLinkService.instance.openFromApp(id);
+              },
+              child: const Text('Open hive'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_readingLink) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10, left: 4),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text('Reading product details…', style: theme.textTheme.bodySmall),
+          ],
+        ),
+      );
+    }
+
+    if (_showFetchChip || _fetchingFull) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: FetchDetailsChip(
+            key: ValueKey(_link),
+            label: _fetchChipLabel,
+            hint: "Some details couldn't be read from this store.",
+            loading: _fetchingFull,
+            onTap: _fetchFullDetails,
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _hiveDropdown() {
@@ -524,6 +757,22 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
                   const SizedBox(height: 20),
                 ],
 
+                if (!_isNote) ...[
+                  // Link first: pasting it fills in everything below.
+                  TextFormField(
+                    controller: _urlController,
+                    decoration: const InputDecoration(
+                      labelText: 'Product Link (optional)',
+                      hintText: 'Paste a link to fill in the details',
+                      prefixIcon: Icon(Icons.link),
+                    ),
+                    keyboardType: TextInputType.url,
+                    onChanged: _onLinkChanged,
+                  ),
+                  _linkStatus(theme),
+                  const SizedBox(height: 16),
+                ],
+
                 // Name / Title
                 TextFormField(
                   controller: _nameController,
@@ -585,9 +834,11 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
                       Expanded(
                         child: TextFormField(
                           controller: _costController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Cost',
-                            prefixIcon: Icon(Icons.currency_rupee),
+                            prefixIcon: const Icon(Icons.currency_rupee),
+                            helperText: _costHelper,
+                            helperMaxLines: 2,
                           ),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           validator: (value) {
@@ -642,19 +893,6 @@ class _CreateWishSheetState extends ConsumerState<CreateWishSheet> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                if (!_isNote) ...[
-                  // Link
-                  TextFormField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Product Link (optional)',
-                      prefixIcon: Icon(Icons.link),
-                    ),
-                    keyboardType: TextInputType.url,
-                  ),
-                  const SizedBox(height: 16),
-                ],
 
                 // Hive dropdown
                 _hiveDropdown(),

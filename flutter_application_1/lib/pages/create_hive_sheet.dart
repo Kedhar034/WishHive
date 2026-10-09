@@ -89,9 +89,25 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not logged in');
 
+      // Captured before the sheet pops; ref is unusable once it unmounts.
+      final uploadService = ref.read(uploadServiceProvider.notifier);
+
       String imageUrl = _networkImageUrl ?? '';
-      if (_selectedImage != null) {
-        imageUrl = _selectedImage!.path;
+      File? coverToUpload;
+      final picked = _selectedImage;
+      if (picked != null) {
+        if (ImageStorageService.isAssetPath(picked.path)) {
+          imageUrl = picked.path;
+        } else if (picked.path == widget.hiveToEdit?.imageUrl) {
+          // A cover from before uploads existed: still only on this phone.
+          imageUrl = picked.path;
+          if (picked.existsSync()) coverToUpload = picked;
+        } else {
+          // The picker's file lives in a cache the OS may clear before the
+          // upload runs, so keep our own copy.
+          imageUrl = await ImageStorageService.saveImage(picked);
+          coverToUpload = File(imageUrl);
+        }
       }
 
       final hive = (widget.hiveToEdit ?? HiveModel(
@@ -109,10 +125,16 @@ class _CreateHiveSheetState extends ConsumerState<CreateHiveSheet> {
         cardColor: _cardColor,
       );
 
+      final String hiveId;
       if (widget.hiveToEdit == null) {
-        await ref.read(firestoreServiceProvider).createHive(hive);
+        hiveId = await ref.read(firestoreServiceProvider).createHive(hive);
       } else {
         await ref.read(firestoreServiceProvider).updateHive(hive);
+        hiveId = hive.id;
+      }
+
+      if (coverToUpload != null) {
+        uploadService.addHiveCover(hiveId, coverToUpload, user.uid);
       }
 
       if (!mounted) return;

@@ -63,6 +63,15 @@
         { "fieldPath": "hiveOwnerId", "order": "ASCENDING" },
         { "fieldPath": "ownerSeen",   "order": "ASCENDING" }
       ]
+    },
+    {
+      "__comment__": "retryAffiliateLinks — wishes whose conversion failed or whose store was not approved yet.",
+      "collectionGroup": "wishes",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "affiliateStatus",    "order": "ASCENDING" },
+        { "fieldPath": "affiliateCheckedAt", "order": "ASCENDING" }
+      ]
     }
   ],
 
